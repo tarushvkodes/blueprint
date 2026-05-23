@@ -34,12 +34,12 @@
       "agentId": "bc-d1f60c59-ec35-4812-8909-7c384c66bb78",
       "runId": "run-fdbf4a37-478c-4ed6-8927-6841c798791d",
       "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
-      "status": "running",
-      "resultStatus": null,
-      "handoffPath": null,
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/frontend-editable-workspace.md",
       "startedAt": "2026-05-23T19:03:35.402Z",
-      "finishedAt": null,
-      "lastUpdate": "2026-05-23T19:03:38.069Z",
+      "finishedAt": "2026-05-23T19:25:02.501Z",
+      "lastUpdate": "2026-05-23T19:25:02.501Z",
       "note": null,
       "attempts": 1,
       "slackTs": null,
@@ -111,13 +111,13 @@
       "handoffPath": "handoffs/model-adapter-and-review.md",
       "startedAt": "2026-05-23T19:03:42.637Z",
       "finishedAt": "2026-05-23T19:15:45.922Z",
-      "lastUpdate": "2026-05-23T19:15:45.923Z",
+      "lastUpdate": "2026-05-23T19:15:46.826Z",
       "note": null,
       "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null
+      "verification": "unit-test-verified"
     },
     {
       "name": "code-validation-pipeline",
@@ -219,6 +219,10 @@
     {
       "at": "2026-05-23T19:13:57.840Z",
       "message": "code-validation-pipeline: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:15:46.826Z",
+      "message": "model-adapter-and-review: verification self-reported (unit-test-verified)"
     }
   ]
 }
