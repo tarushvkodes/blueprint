@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="$ROOT_DIR/build"
+LIB_DIR="$ROOT_DIR/libs"
+STUB_SRC_DIR="$ROOT_DIR/sdk-stubs/src/main/java"
+STUB_CLASSES_DIR="$BUILD_DIR/sdk-stubs"
+TEAMCODE_SRC_DIR="$ROOT_DIR/TeamCode/src/main/java"
+TEAMCODE_CLASSES_DIR="$BUILD_DIR/teamcode"
+ROBOT_CORE_JAR="$LIB_DIR/RobotCore.jar"
+
+clean_task() {
+  rm -rf "$BUILD_DIR"
+}
+
+compile_stubs() {
+  mkdir -p "$STUB_CLASSES_DIR" "$LIB_DIR"
+  mapfile -t stub_sources < <(find "$STUB_SRC_DIR" -name '*.java' | sort)
+  if [[ "${#stub_sources[@]}" -eq 0 ]]; then
+    echo "No FTC SDK stubs found under $STUB_SRC_DIR"
+    exit 1
+  fi
+
+  javac --release 17 -d "$STUB_CLASSES_DIR" "${stub_sources[@]}"
+  jar --create --file "$ROBOT_CORE_JAR" -C "$STUB_CLASSES_DIR" .
+}
+
+compile_teamcode() {
+  mkdir -p "$TEAMCODE_CLASSES_DIR"
+  mapfile -t teamcode_sources < <(find "$TEAMCODE_SRC_DIR" -name '*.java' | sort)
+  if [[ "${#teamcode_sources[@]}" -eq 0 ]]; then
+    echo "No TeamCode Java sources were found."
+    return 0
+  fi
+
+  javac --release 17 -cp "$ROBOT_CORE_JAR" -d "$TEAMCODE_CLASSES_DIR" "${teamcode_sources[@]}"
+}
+
+run_compile() {
+  compile_stubs
+  compile_teamcode
+  echo "BUILD SUCCESSFUL"
+}
+
+if [[ "$#" -eq 0 ]]; then
+  echo "No task specified. Supported tasks: clean, compileJava"
+  exit 1
+fi
+
+for arg in "$@"; do
+  case "$arg" in
+    clean)
+      clean_task
+      ;;
+    compileJava)
+      run_compile
+      ;;
+    -*)
+      ;;
+    *)
+      echo "Unsupported task: $arg"
+      exit 1
+      ;;
+  esac
+done
