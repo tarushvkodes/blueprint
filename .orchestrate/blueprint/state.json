@@ -39,13 +39,13 @@
       "handoffPath": "handoffs/frontend-editable-workspace.md",
       "startedAt": "2026-05-23T19:03:35.402Z",
       "finishedAt": "2026-05-23T19:25:02.501Z",
-      "lastUpdate": "2026-05-23T19:25:02.501Z",
+      "lastUpdate": "2026-05-23T19:25:04.040Z",
       "note": null,
       "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null
+      "verification": "unit-test-verified"
     },
     {
       "name": "rules-rag-upgrade",
@@ -154,17 +154,18 @@
       "agentId": null,
       "runId": null,
       "parentAgentId": null,
-      "status": "pending",
+      "status": "running",
       "resultStatus": null,
       "handoffPath": null,
-      "startedAt": null,
+      "startedAt": "2026-05-23T19:25:04.718Z",
       "finishedAt": null,
-      "lastUpdate": null,
+      "lastUpdate": "2026-05-23T19:25:04.718Z",
       "note": null,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null
+      "verification": null,
+      "attempts": 1
     },
     {
       "name": "v-rules-rag",
@@ -223,6 +224,10 @@
     {
       "at": "2026-05-23T19:15:46.826Z",
       "message": "model-adapter-and-review: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:25:04.040Z",
+      "message": "frontend-editable-workspace: verification self-reported (unit-test-verified)"
     }
   ]
 }
