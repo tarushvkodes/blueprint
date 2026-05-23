@@ -283,32 +283,6 @@
         "`npm run build` passes."
       ],
       "verify": "## Setup\n- `npm install`.\n- Install Java 17 if missing (`apt-get install -y openjdk-17-jdk-headless`).\n- `npm run api` in background.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `cd fixtures/ftc-sdk && ./gradlew compileJava` (must succeed standalone).\n- `npm run test:code` (or `npm run test:smoke` if rolled in).\n- `curl -s -X POST localhost:8787/api/projects/demo/code/validate | jq '.ok'` returns `true`.\n\n## Manual\n- Inspect generated TeleOpMain.java / AutoMain.java / IntakeSubsystem.java for compliant FTC SDK patterns.\n- Run the new GitHub Actions workflow locally with `act` if available; otherwise trust CI on the PR.\n\n## Gotchas\n- Keep the FTC SDK stub jar tiny — only the classes the generator references.\n- Use a 90s gradle timeout to keep CI fast and avoid network downloads."
-    },
-    {
-      "name": "v-frontend-editable",
-      "type": "verifier",
-      "verifies": "frontend-editable-workspace",
-      "model": "claude-opus-4-7",
-      "maxAttempts": 2,
-      "scopedGoal": "Verify every acceptance criterion of `frontend-editable-workspace`. Build the frontend, boot the modular API, walk the wizard + each editable surface manually (or via Playwright if scripted), then file evidence in the Verification handoff. Confirm the wizard captures every onboarding field from context.md, edits persist where promised, refusal banner appears, and the landing CTAs route correctly. If something is missing, report `verifier-failed` with a precise gap list rather than re-implementing it.",
-      "acceptance": [
-        "Verification section includes execution evidence (commands run, output snippets) for each acceptance criterion of frontend-editable-workspace.",
-        "Verdict line uses the exact taxonomy: live-ui-verified | unit-test-verified | type-check-only | verifier-blocked | verifier-failed."
-      ],
-      "verify": "## Setup\n- `npm install`.\n- `npm run api` in one shell, `npm run web` in another (or `npm run dev`).\n\n## Automated\n- `npm run lint`\n- `npm run build`\n\n## Manual\n- Walk the wizard end to end against http://localhost:5173/.\n- Test each editable surface; reload to confirm persistence claims.\n- Try a chat question on the sample season to trigger the refusal banner.\n\n## Gotchas\n- This is a verifier; do not modify the worker's code. Report gaps in the handoff."
-    },
-    {
-      "name": "v-rules-rag",
-      "type": "verifier",
-      "verifies": "rules-rag-upgrade",
-      "model": "claude-opus-4-7",
-      "maxAttempts": 2,
-      "scopedGoal": "Verify every acceptance criterion of `rules-rag-upgrade` against the actual server: chunks expose page/section/ruleNumber/version/sourceUrl, documents have sha256 checksums, the FIRST URL ingest endpoint enforces its allow-list, replacing a manual marks the older outdated, rules search returns the documented citation shape, and chat refuses uncited rules questions. Surface concrete command output + response snippets in the Verification handoff. If a criterion is unmet, report `verifier-failed` with a precise gap list.",
-      "acceptance": [
-        "Verification section includes execution evidence (commands run, output snippets) for each acceptance criterion of rules-rag-upgrade.",
-        "Verdict line uses the exact taxonomy: live-ui-verified | unit-test-verified | type-check-only | verifier-blocked | verifier-failed."
-      ],
-      "verify": "## Setup\n- `npm install`.\n- `npm run api`.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `npm run test:rules` (or `npm run test:smoke` if rolled in).\n\n## Manual\n- POST a small PDF; inspect chunk metadata via the documents endpoint.\n- POST a forbidden URL; expect 4xx.\n- POST a chat question without a real manual; expect refusal.\n- Replace the manual; expect outdated flag + replacedDocumentId.\n\n## Gotchas\n- Do not modify code; only verify."
     }
   ]
 }
