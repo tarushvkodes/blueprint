@@ -41,11 +41,11 @@
       "finishedAt": null,
       "lastUpdate": "2026-05-23T19:03:38.069Z",
       "note": null,
+      "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null,
-      "attempts": 1
+      "verification": null
     },
     {
       "name": "rules-rag-upgrade",
@@ -65,11 +65,11 @@
       "finishedAt": "2026-05-23T19:12:45.870Z",
       "lastUpdate": "2026-05-23T19:12:46.898Z",
       "note": null,
+      "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": "unit-test-verified",
-      "attempts": 1
+      "verification": "unit-test-verified"
     },
     {
       "name": "rev-catalog-and-supply",
@@ -89,11 +89,11 @@
       "finishedAt": "2026-05-23T19:10:33.335Z",
       "lastUpdate": "2026-05-23T19:10:36.306Z",
       "note": null,
+      "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": "unit-test-verified",
-      "attempts": 1
+      "verification": "unit-test-verified"
     },
     {
       "name": "model-adapter-and-review",
@@ -113,11 +113,11 @@
       "finishedAt": null,
       "lastUpdate": "2026-05-23T19:03:45.621Z",
       "note": null,
+      "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null,
-      "attempts": 1
+      "verification": null
     },
     {
       "name": "code-validation-pipeline",
@@ -130,18 +130,18 @@
       "agentId": "bc-268b1b44-42ea-4fab-bdc2-b92f864e73c2",
       "runId": "run-2d375649-5fd6-4543-9afa-150cfc94d4a9",
       "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
-      "status": "running",
-      "resultStatus": null,
-      "handoffPath": null,
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/code-validation-pipeline.md",
       "startedAt": "2026-05-23T19:03:45.623Z",
-      "finishedAt": null,
-      "lastUpdate": "2026-05-23T19:03:48.119Z",
+      "finishedAt": "2026-05-23T19:13:56.967Z",
+      "lastUpdate": "2026-05-23T19:13:56.968Z",
       "note": null,
+      "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null,
-      "attempts": 1
+      "verification": null
     },
     {
       "name": "v-frontend-editable",
@@ -184,11 +184,11 @@
       "finishedAt": null,
       "lastUpdate": "2026-05-23T19:12:56.698Z",
       "note": "spawn failed after 3 transient sub-attempts: l: [validation_error] Upgrade to Ultra for more Cloud Agents: You've reached the limit for your current plan. Upgrade to Ultra to run more Cloud Agents simultaneously.",
+      "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": "unknown",
-      "verification": null,
-      "attempts": 1
+      "verification": null
     }
   ],
   "attention": [
