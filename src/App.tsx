@@ -15,12 +15,15 @@ function App() {
     workspaceStatus,
     chatAnswer,
     aiStatus,
+    createProject,
     regenerateProject,
     saveIntake,
     generateFullBlueprint,
+    selectDesign,
     uploadManual,
     syncCatalog,
     askBlueprint,
+    analyzeDriverLogs,
     downloadCode,
   } = useBlueprintProject()
   const [activeAccordion, setActiveAccordion] = useState(1)
@@ -43,7 +46,6 @@ function App() {
       <Workspace
         project={project}
         selectedConcept={selectedConcept}
-        setSelectedConcept={setSelectedConcept}
         total={total}
         activeTab={activeWorkspaceTab}
         setActiveTab={setActiveWorkspaceTab}
@@ -51,12 +53,15 @@ function App() {
         chatAnswer={chatAnswer}
         aiStatus={aiStatus}
         openLanding={openLanding}
+        createProject={createProject}
         regenerateProject={regenerateProject}
         saveIntake={saveIntake}
         generateFullBlueprint={generateFullBlueprint}
+        selectDesign={selectDesign}
         uploadManual={uploadManual}
         syncCatalog={syncCatalog}
         askBlueprint={askBlueprint}
+        analyzeDriverLogs={analyzeDriverLogs}
         downloadCode={downloadCode}
       />
     )

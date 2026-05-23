@@ -19,12 +19,14 @@ export type Team = {
   goals?: string
   constraints?: string
   strategyMode?: string
+  strategyNotes?: string
   cadExperience?: string
   programmingExperience?: string
   buildSpace?: string
 }
 
 export type Concept = {
+  id?: string
   name: string
   difficulty: string
   cost: number
@@ -62,6 +64,7 @@ export type PhysicsItem = {
 
 export type ProjectData = {
   id?: string
+  demo?: boolean
   team: Team
   season?: SeasonSource
   generatedBy?: string
@@ -159,6 +162,7 @@ export type ApiBuildStep = BuildGuideStep
 
 export type ApiProjectResponse = {
   id?: string
+  demo?: boolean
   team?: Partial<Team>
   concepts?: ApiConcept[]
   rules?: Rule[]

@@ -1439,6 +1439,234 @@ button:active,
   gap: 14px;
 }
 
+.wizard-grid {
+  grid-template-columns: minmax(210px, 0.58fr) minmax(360px, 1.35fr) minmax(240px, 0.72fr);
+  align-items: start;
+}
+
+.wizard-rail {
+  display: grid;
+  gap: 8px;
+}
+
+.wizard-rail button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px 10px;
+  width: 100%;
+  padding: 13px;
+  border: 1px solid rgba(238, 248, 240, 0.13);
+  border-radius: 8px;
+  color: rgba(238, 248, 240, 0.72);
+  background: rgba(7, 17, 14, 0.28);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wizard-rail button:hover,
+.wizard-rail button.is-active {
+  border-color: rgba(244, 198, 106, 0.48);
+  background: rgba(244, 198, 106, 0.1);
+}
+
+.wizard-rail span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  border-radius: 50%;
+  color: #07110e;
+  background: rgba(238, 248, 240, 0.82);
+  font-weight: 900;
+}
+
+.wizard-rail strong {
+  color: #eef8f0;
+}
+
+.wizard-rail small {
+  line-height: 1.35;
+}
+
+.wizard-card {
+  min-height: 520px;
+  align-content: start;
+}
+
+.wizard-card-header {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.wizard-card-header span {
+  color: #87d7bc;
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.wizard-card-header h3 {
+  font-size: clamp(1.8rem, 3vw, 3.1rem);
+  line-height: 0.98;
+}
+
+.wizard-card-header p {
+  margin: 0;
+  color: rgba(238, 248, 240, 0.64);
+}
+
+.strategy-editor {
+  display: grid;
+  gap: 16px;
+}
+
+.mode-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mode-picker button,
+.priority-picker button {
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  color: #eef8f0;
+  background: rgba(7, 17, 14, 0.34);
+  cursor: pointer;
+}
+
+.mode-picker button {
+  display: grid;
+  gap: 8px;
+  min-height: 130px;
+  padding: 14px;
+  text-align: left;
+}
+
+.mode-picker button.is-active,
+.priority-picker button.is-active {
+  border-color: rgba(244, 198, 106, 0.68);
+  background: rgba(244, 198, 106, 0.13);
+}
+
+.mode-picker span {
+  color: rgba(238, 248, 240, 0.62);
+  font-size: 0.88rem;
+  line-height: 1.42;
+}
+
+.priority-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.priority-picker button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.review-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.review-board div {
+  display: grid;
+  gap: 8px;
+  min-height: 130px;
+  padding: 15px;
+  border: 1px solid rgba(238, 248, 240, 0.13);
+  border-radius: 8px;
+  background: rgba(7, 17, 14, 0.34);
+}
+
+.review-board svg {
+  color: #87d7bc;
+}
+
+.review-board span {
+  color: rgba(238, 248, 240, 0.62);
+}
+
+.review-board strong {
+  align-self: end;
+  color: #f4c66a;
+  font-size: 1.08rem;
+}
+
+.setup-companion {
+  align-content: start;
+}
+
+.data-upload-stack {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.secondary-upload {
+  color: #eef8f0;
+  background: rgba(238, 248, 240, 0.1);
+}
+
+.setup-meter {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.setup-meter span {
+  color: rgba(238, 248, 240, 0.7);
+  font-size: 0.88rem;
+}
+
+.setup-meter div {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(238, 248, 240, 0.12);
+}
+
+.setup-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #87d7bc;
+  transition: width 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.setup-checklist {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 4px 0 0;
+  list-style: none;
+}
+
+.setup-checklist li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: rgba(238, 248, 240, 0.56);
+  font-size: 0.9rem;
+}
+
+.setup-checklist li.is-done {
+  color: #eef8f0;
+}
+
+.setup-checklist li.is-done svg {
+  color: #87d7bc;
+}
+
+.compact-artifacts {
+  padding-top: 4px;
+}
+
 .setup-card {
   display: grid;
   gap: 12px;
@@ -1539,6 +1767,11 @@ button:active,
   background: #eef8f0;
   font-weight: 850;
   cursor: pointer;
+}
+
+.setup-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .nav-shell.liquid-glass,
@@ -1745,7 +1978,10 @@ button:active,
   .workspace-concepts,
   .workspace-physics,
   .setup-grid,
-  .setup-form {
+  .setup-form,
+  .wizard-grid,
+  .mode-picker,
+  .review-board {
     grid-template-columns: 1fr;
   }
 

@@ -30,6 +30,7 @@ function normalizeConcept(concept: ApiConcept | Concept): Concept {
   const mainMechanisms = 'mainMechanisms' in concept ? concept.mainMechanisms : undefined
 
   return {
+    id: concept.id,
     name: concept.name,
     difficulty: concept.difficulty,
     cost: estimatedCost ?? concept.cost ?? 0,
@@ -96,6 +97,7 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
 
   return {
     id: data.id ?? previousProject.id,
+    demo: data.demo ?? previousProject.demo,
     team: {
       ...previousProject.team,
       ...(data.team ?? {}),
@@ -122,6 +124,12 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
 
 export function fetchDemoProject() {
   return requestJson<ProjectData>('/project/demo')
+}
+
+export async function fetchProject(projectId: string, previousProject: ProjectData) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}`)
+
+  return normalizeProjectResponse(data, previousProject)
 }
 
 export function fetchAiStatus() {
@@ -153,6 +161,16 @@ export async function generateBlueprint(projectId: string, team: Team, previousP
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ team }),
+  })
+
+  return normalizeProjectResponse(data, previousProject)
+}
+
+export async function selectProjectDesign(projectId: string, designId: string, previousProject: ProjectData) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}/select-design`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ designId }),
   })
 
   return normalizeProjectResponse(data, previousProject)
@@ -191,6 +209,16 @@ export async function askBlueprintQuestion(projectId: string, message = defaultB
   })
 
   return data.answer ?? 'Blueprint returned no answer.'
+}
+
+export async function analyzeDriverLogText(projectId: string, text: string) {
+  const data = await requestJson<{ suggestions?: string[] }>(`/projects/${projectId}/driver-logs/analyze`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ csv: text }),
+  })
+
+  return data.suggestions?.join(' ') ?? 'Driver log analyzed, but no suggestions were returned.'
 }
 
 export function projectCodeExportUrl(projectId: string) {
