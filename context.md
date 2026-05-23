@@ -720,7 +720,7 @@ Legend:
 - [x] API health endpoint
 - [x] Local PDF ingestion for writeup/manual
 - [~] Document chunking
-- [ ] Persistent database
+- [~] Local JSON project persistence; persistent database still not added
 - [ ] Authentication
 - [ ] File storage service
 - [ ] Background job queue
@@ -737,9 +737,9 @@ Legend:
 - [x] Chat tab
 - [x] Buttons open workspace instead of hash-jumping
 - [~] Responsive workspace layout
-- [ ] Real project wizard form
-- [ ] Upload UI for manual/inventory/logs
-- [ ] Editable artifacts
+- [x] Real project wizard form
+- [x] Upload UI for manual/inventory/logs
+- [~] Editable team, strategy, budget, and inventory intake artifacts
 - [ ] Apply-chat-suggestion workflow
 
 ### Rules / RAG
@@ -838,7 +838,7 @@ Legend:
 - [x] Driver log analysis endpoint
 - [x] Basic button usage counts
 - [x] Basic macro/remap suggestions
-- [ ] Upload UI
+- [x] Upload UI
 - [ ] CSV parser with schema
 - [ ] Match phase analysis
 - [ ] Timing gaps
@@ -1036,4 +1036,3 @@ Mitigation:
 - Do not expose local reference CAD/code through API endpoints.
 - App-generated CAD/code should be based on team constraints, selected architecture, catalog metadata, and explicit prompt/context objects.
 - Keep UI buttons action-oriented. They should open or mutate workspace state, not just bounce users around landing-page anchors.
-

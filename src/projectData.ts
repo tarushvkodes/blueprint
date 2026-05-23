@@ -44,6 +44,7 @@ export const fallbackProject: ProjectData = {
     goals: 'Build a reliable, legal FTC robot that students can understand and iterate.',
     constraints: 'Keep the design inside FTC starting configuration and budget.',
     strategyMode: 'hybrid',
+    strategyNotes: 'Prefer a conservative first robot plan with clear tradeoffs before adding high-risk mechanisms.',
     cadExperience: 'Beginner',
     programmingExperience: 'Beginner',
     buildSpace: 'Classroom or garage build space',

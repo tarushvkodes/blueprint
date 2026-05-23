@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const cacheDir = path.join(rootDir, '.cache');
 const uploadDir = path.join(rootDir, 'uploads');
+const projectsCachePath = path.join(cacheDir, 'blueprint-projects.json');
 
 function loadEnvFile() {
   const envPath = path.join(rootDir, '.env');
@@ -557,6 +558,7 @@ function defaultTeam(body = {}) {
     goals: body.goals || 'Build a reliable, legal FTC robot that students can understand, assemble, and iterate.',
     constraints: body.constraints || '',
     strategyMode: body.strategyMode || 'hybrid',
+    strategyNotes: body.strategyNotes || '',
     cadExperience: body.cadExperience || 'Beginner',
     programmingExperience: body.programmingExperience || 'Beginner',
     buildSpace: body.buildSpace || 'Classroom or garage build space',
@@ -946,11 +948,19 @@ function buildGuideHtml(project) {
 }
 
 function analyzeDriverLogs(logs = []) {
-  const events = Array.isArray(logs) ? logs : String(logs).split(/\n/).map((line) => line.split(','));
+  const events = Array.isArray(logs)
+    ? logs
+    : String(logs)
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !/^time\s*[,;\t ]\s*button/i.test(line))
+      .map((line) => line.split(/,|\t/));
   const counts = new Map();
+  const controlPattern = /\b(?:(?:gamepad[12]\.)?(?:a|b|x|y)|left_bumper|right_bumper|left_trigger|right_trigger|dpad_[a-z]+)\b/gi;
   for (const event of events) {
     const text = Array.isArray(event) ? event.join(' ') : JSON.stringify(event);
-    for (const token of text.match(/\b(gamepad[12]\.)?[abxy]|left_bumper|right_bumper|left_trigger|right_trigger|dpad_[a-z]+\b/gi) || []) {
+    for (const token of text.match(controlPattern) || []) {
       counts.set(token.toLowerCase(), (counts.get(token.toLowerCase()) || 0) + 1);
     }
   }
@@ -1170,11 +1180,12 @@ async function applyAiPacket(project) {
   return project;
 }
 
-async function createProject(body = {}) {
+async function createProject(body = {}, options = {}) {
   const team = defaultTeam(body.team || body);
   const id = slugId('project');
   const project = {
     id,
+    demo: Boolean(options.demo),
     status: 'draft',
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -1207,7 +1218,69 @@ async function createProject(body = {}) {
   project.driverInsight = analyzeDriverLogs([]);
   project.sponsorDraft = sponsorEmail({ team });
   state.projects.set(id, project);
+  if (!project.demo) await persistProjects();
   return project;
+}
+
+function hydrateProject(rawProject = {}) {
+  const team = defaultTeam(rawProject.team || {});
+  const season = rawProject.season || currentSeasonSource(rawProject);
+  const concepts = Array.isArray(rawProject.concepts) && rawProject.concepts.length
+    ? rawProject.concepts
+    : buildConcepts(team, season);
+  const selectedDesign = rawProject.selectedDesign || concepts[1] || concepts[0];
+  const project = {
+    ...rawProject,
+    id: rawProject.id || slugId('project'),
+    demo: false,
+    status: rawProject.status || 'draft',
+    createdAt: rawProject.createdAt || nowIso(),
+    updatedAt: rawProject.updatedAt || nowIso(),
+    team,
+    documents: Array.isArray(rawProject.documents) ? rawProject.documents : [],
+    season,
+    generatedBy: rawProject.generatedBy || 'local-fallback',
+    aiFallbackReason: rawProject.aiFallbackReason || null,
+    strategy: rawProject.strategy || buildStrategy(team, season),
+    concepts,
+    selectedDesign,
+    bom: rawProject.bom || buildBom(team, selectedDesign?.id),
+    physics: Array.isArray(rawProject.physics) && rawProject.physics.length ? rawProject.physics : calculateMechanisms(),
+    cad: rawProject.cad || null,
+    code: rawProject.code || null,
+    buildGuide: rawProject.buildGuide || null,
+    warnings: rawProject.warnings || [
+      'Rule-sensitive claims require citations from the indexed manual.',
+      'CAD is conceptual until dimensions and clearances are verified.',
+      'Generated FTC SDK code must be compiled in a real FTC project before robot use.',
+    ],
+    driverInsight: rawProject.driverInsight || analyzeDriverLogs([]),
+    sponsorDraft: rawProject.sponsorDraft || sponsorEmail({ team }),
+  };
+  project.cad = project.cad || generateCadConcept(project);
+  project.code = project.code || generateCode(project);
+  project.buildGuide = project.buildGuide || buildGuide(project);
+  return project;
+}
+
+async function persistProjects() {
+  const projects = Array.from(state.projects.values()).filter((project) => !project.demo);
+  await fsp.writeFile(
+    projectsCachePath,
+    JSON.stringify({ savedAt: nowIso(), projects }, null, 2),
+    'utf8',
+  );
+}
+
+async function loadPersistedProjects() {
+  if (!fs.existsSync(projectsCachePath)) return 0;
+  const payload = JSON.parse(await fsp.readFile(projectsCachePath, 'utf8'));
+  const projects = Array.isArray(payload.projects) ? payload.projects : [];
+  for (const rawProject of projects) {
+    const project = hydrateProject(rawProject);
+    state.projects.set(project.id, project);
+  }
+  return projects.length;
 }
 
 function projectForResponse(project) {
@@ -1282,10 +1355,11 @@ function projectForResponse(project) {
 
 await loadCachedCatalog();
 await ingestDefaultReferences().catch((error) => console.warn('Reference ingestion skipped:', error.message));
+await loadPersistedProjects().catch((error) => console.warn('Project cache load skipped:', error.message));
 if (state.catalog.size === 0) {
   syncRevCatalog({ limit: 12 }).catch((error) => console.warn('Initial REV catalog sync skipped:', error.message));
 }
-const demoProject = await createProject();
+const demoProject = await createProject({}, { demo: true });
 
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -1317,15 +1391,20 @@ app.post('/api/projects', async (req, res, next) => {
 app.get('/api/projects/:id', (req, res) => {
   const project = state.projects.get(req.params.id);
   if (!project) return res.status(404).json({ error: 'Project not found' });
-  res.json(project);
+  res.json(projectForResponse(project));
 });
 
-app.patch('/api/projects/:id', (req, res) => {
-  const project = state.projects.get(req.params.id);
-  if (!project) return res.status(404).json({ error: 'Project not found' });
-  Object.assign(project.team, defaultTeam({ ...project.team, ...(req.body.team || req.body || {}) }));
-  project.updatedAt = nowIso();
-  res.json(projectForResponse(project));
+app.patch('/api/projects/:id', async (req, res, next) => {
+  try {
+    const project = state.projects.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    Object.assign(project.team, defaultTeam({ ...project.team, ...(req.body.team || req.body || {}) }));
+    project.updatedAt = nowIso();
+    if (!project.demo) await persistProjects();
+    res.json(projectForResponse(project));
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/projects/:id/intake', async (req, res, next) => {
@@ -1334,6 +1413,7 @@ app.post('/api/projects/:id/intake', async (req, res, next) => {
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.team = defaultTeam({ ...project.team, ...(req.body.team || req.body || {}) });
     project.updatedAt = nowIso();
+    if (!project.demo) await persistProjects();
     res.json(projectForResponse(project));
   } catch (error) {
     next(error);
@@ -1357,6 +1437,7 @@ app.post('/api/projects/:id/generate-blueprint', async (req, res, next) => {
     project.code = generateCode(project);
     project.buildGuide = project.buildGuide || buildGuide(project);
     project.updatedAt = nowIso();
+    if (!project.demo) await persistProjects();
     res.json(projectForResponse(project));
   } catch (error) {
     next(error);
@@ -1394,6 +1475,7 @@ app.post('/api/projects/:id/documents/upload', upload.single('file'), async (req
       project.season = currentSeasonSource(project);
       project.team.manual = doc.seasonSource?.title || doc.title;
       project.updatedAt = nowIso();
+      if (!project.demo) await persistProjects();
     }
     res.status(201).json({ document: doc, project: project ? projectForResponse(project) : null });
   } catch (error) {
@@ -1442,15 +1524,21 @@ app.post('/api/projects/:id/generate-designs', (req, res) => {
   res.json(project.concepts);
 });
 
-app.post('/api/projects/:id/select-design', (req, res) => {
-  const project = state.projects.get(req.params.id);
-  if (!project) return res.status(404).json({ error: 'Project not found' });
-  project.selectedDesign = project.concepts.find((concept) => concept.id === req.body.designId) || project.concepts[1];
-  project.bom = buildBom(project.team, project.selectedDesign.id);
-  project.cad = generateCadConcept(project);
-  project.code = generateCode(project);
-  project.buildGuide = buildGuide(project);
-  res.json(project);
+app.post('/api/projects/:id/select-design', async (req, res, next) => {
+  try {
+    const project = state.projects.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    project.selectedDesign = project.concepts.find((concept) => concept.id === req.body.designId) || project.concepts[1];
+    project.bom = buildBom(project.team, project.selectedDesign.id);
+    project.cad = generateCadConcept(project);
+    project.code = generateCode(project);
+    project.buildGuide = buildGuide(project);
+    project.updatedAt = nowIso();
+    if (!project.demo) await persistProjects();
+    res.json(projectForResponse(project));
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/projects/:id/generate-bom', (req, res) => {
@@ -1586,11 +1674,17 @@ app.post('/api/projects/:id/agents/review-plan', (req, res) => {
   });
 });
 
-app.post('/api/projects/:id/driver-logs/analyze', (req, res) => {
-  const project = state.projects.get(req.params.id);
-  if (!project) return res.status(404).json({ error: 'Project not found' });
-  project.driverInsight = analyzeDriverLogs(req.body.logs || req.body.events || req.body.csv || []);
-  res.json(project.driverInsight);
+app.post('/api/projects/:id/driver-logs/analyze', async (req, res, next) => {
+  try {
+    const project = state.projects.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    project.driverInsight = analyzeDriverLogs(req.body.logs || req.body.events || req.body.csv || []);
+    project.updatedAt = nowIso();
+    if (!project.demo) await persistProjects();
+    res.json(project.driverInsight);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/teams/:id/sponsor-email', (req, res) => {
