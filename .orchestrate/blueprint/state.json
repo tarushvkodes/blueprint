@@ -106,12 +106,12 @@
       "agentId": "bc-70d180dd-1d46-4d10-b989-7c062acfdb72",
       "runId": "run-79302a23-95bd-41dc-8359-e6db12798b92",
       "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
-      "status": "running",
-      "resultStatus": null,
-      "handoffPath": null,
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/model-adapter-and-review.md",
       "startedAt": "2026-05-23T19:03:42.637Z",
-      "finishedAt": null,
-      "lastUpdate": "2026-05-23T19:03:45.621Z",
+      "finishedAt": "2026-05-23T19:15:45.922Z",
+      "lastUpdate": "2026-05-23T19:15:45.923Z",
       "note": null,
       "attempts": 1,
       "slackTs": null,
@@ -135,13 +135,13 @@
       "handoffPath": "handoffs/code-validation-pipeline.md",
       "startedAt": "2026-05-23T19:03:45.623Z",
       "finishedAt": "2026-05-23T19:13:56.967Z",
-      "lastUpdate": "2026-05-23T19:13:56.968Z",
+      "lastUpdate": "2026-05-23T19:13:57.840Z",
       "note": null,
       "attempts": 1,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null
+      "verification": "unit-test-verified"
     },
     {
       "name": "v-frontend-editable",
@@ -215,6 +215,10 @@
     {
       "at": "2026-05-23T19:12:57.655Z",
       "message": "v-rules-rag: spawn failed after 3 transient sub-attempts: l: [validation_error] Upgrade to Ultra for more Cloud Agents: You've reached the limit for your current plan. Upgrade to Ultra to run more Cloud Agents simultaneously."
+    },
+    {
+      "at": "2026-05-23T19:13:57.840Z",
+      "message": "code-validation-pipeline: verification self-reported (unit-test-verified)"
     }
   ]
 }
