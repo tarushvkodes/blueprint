@@ -1,4 +1,4 @@
-import { defaultBlueprintQuestion } from './projectData'
+import { defaultBlueprintQuestion, fallbackProject } from './projectData'
 import type {
   ApiBomItem,
   ApiConcept,
@@ -8,11 +8,14 @@ import type {
   Concept,
   PhysicsItem,
   ProjectData,
+  Substitution,
   Team,
   AiStatus,
 } from './types'
 
-const API_BASE = 'http://localhost:8787/api'
+const API_BASE = (import.meta.env?.VITE_API_BASE as string | undefined) || 'http://localhost:8787/api'
+
+const EMPTY_PREVIOUS: ProjectData = fallbackProject
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init)
@@ -41,6 +44,7 @@ function normalizeConcept(concept: ApiConcept | Concept): Concept {
 }
 
 function normalizeBomItem(item: ApiBomItem | BomItem): BomItem {
+  const override = 'priceOverride' in item ? item.priceOverride : undefined
   return {
     subsystem: item.subsystem,
     sku: item.sku,
@@ -48,6 +52,9 @@ function normalizeBomItem(item: ApiBomItem | BomItem): BomItem {
     qty: item.qty,
     price: item.price,
     stock: item.stock,
+    priceOverride: override === undefined ? null : override,
+    owned: 'owned' in item ? Boolean(item.owned) : false,
+    note: 'note' in item ? String(item.note ?? '') : '',
   }
 }
 
@@ -115,13 +122,29 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
       : data.buildSteps ?? previousProject.buildSteps,
     buildGuide: data.buildGuide ?? previousProject.buildGuide,
     codeFiles: data.code ? Object.keys(data.code) : data.codeFiles ?? previousProject.codeFiles,
+    substitutions: data.substitutions ?? previousProject.substitutions ?? [],
     driverInsight: normalizeDriverInsight(data.driverInsight, previousProject.driverInsight),
     sponsorDraft: normalizeSponsorDraft(data.sponsorDraft, previousProject.sponsorDraft),
   }
 }
 
-export function fetchDemoProject() {
-  return requestJson<ProjectData>('/project/demo')
+export async function fetchDemoProject() {
+  const data = await requestJson<ApiProjectResponse>('/project/demo')
+  return normalizeProjectResponse(data, EMPTY_PREVIOUS)
+}
+
+export async function fetchProjectById(projectId: string, previousProject?: ProjectData) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}`)
+  return normalizeProjectResponse(data, previousProject ?? EMPTY_PREVIOUS)
+}
+
+export async function createProject(team: Team, previousProject?: ProjectData) {
+  const data = await requestJson<ApiProjectResponse>('/projects', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ team }),
+  })
+  return normalizeProjectResponse(data, previousProject ?? EMPTY_PREVIOUS)
 }
 
 export function fetchAiStatus() {
@@ -183,14 +206,127 @@ export async function syncRevCatalog() {
   return data.synced ?? 0
 }
 
-export async function askBlueprintQuestion(projectId: string, message = defaultBlueprintQuestion) {
-  const data = await requestJson<{ answer?: string }>(`/projects/${projectId}/chat`, {
+export type ChatCitation = {
+  ruleNumber?: string
+  manualSection?: string
+  sourceDocument?: string
+  version?: string | null
+  explanation?: string
+  confidence?: string
+}
+
+export type ChatAskResult = {
+  answer: string
+  citations: ChatCitation[]
+  suggestedActions: string[]
+  generatedBy?: string
+}
+
+export async function askBlueprintQuestion(projectId: string, message = defaultBlueprintQuestion): Promise<ChatAskResult> {
+  const data = await requestJson<{
+    answer?: string
+    citations?: ChatCitation[]
+    suggestedActions?: string[]
+    generatedBy?: string
+  }>(`/projects/${projectId}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ message }),
   })
 
-  return data.answer ?? 'Blueprint returned no answer.'
+  return {
+    answer: data.answer ?? 'Blueprint returned no answer.',
+    citations: data.citations ?? [],
+    suggestedActions: data.suggestedActions ?? [],
+    generatedBy: data.generatedBy,
+  }
+}
+
+export type BomUpdatePatch = {
+  sku: string
+  qty?: number
+  price?: number
+  priceOverride?: number | null
+  owned?: boolean
+  note?: string
+}
+
+export async function updateBomEntries(
+  projectId: string,
+  updates: BomUpdatePatch[],
+  previousProject: ProjectData,
+) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}/bom/update`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ updates }),
+  })
+  return normalizeProjectResponse(data, previousProject)
+}
+
+export async function addBomSubstitution(
+  projectId: string,
+  substitution: Substitution,
+  previousProject: ProjectData,
+) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}/bom/update`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ addSubstitution: substitution }),
+  })
+  return normalizeProjectResponse(data, previousProject)
+}
+
+export async function removeBomSubstitution(
+  projectId: string,
+  sku: string,
+  previousProject: ProjectData,
+) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}/bom/update`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ removeSubstitution: sku }),
+  })
+  return normalizeProjectResponse(data, previousProject)
+}
+
+export async function appendProjectNotes(
+  projectId: string,
+  text: string,
+  previousProject: ProjectData,
+  mode: 'append' | 'replace' = 'append',
+) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}/notes`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text, mode }),
+  })
+  return normalizeProjectResponse(data, previousProject)
+}
+
+export async function uploadInventoryPdf(projectId: string, file: File, previousProject: ProjectData) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('title', file.name)
+  formData.append('type', 'inventory')
+
+  const data = await requestJson<{ project?: ApiProjectResponse }>(`/projects/${projectId}/documents/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!data.project) return previousProject
+  return normalizeProjectResponse(data.project, previousProject)
+}
+
+export async function analyzeDriverLogs(projectId: string, events: unknown) {
+  return requestJson<{ suggestions?: string[]; buttonUsage?: Array<{ button: string; count: number }>; eventCount?: number; recommendedMap?: Record<string, Record<string, string>> }>(
+    `/projects/${projectId}/driver-logs/analyze`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ logs: events }),
+    },
+  )
 }
 
 export function projectCodeExportUrl(projectId: string) {
