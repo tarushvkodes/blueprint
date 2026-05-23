@@ -1,0 +1,237 @@
+{
+  "rootSlug": "blueprint",
+  "tasks": [
+    {
+      "name": "server-refactor",
+      "type": "worker",
+      "branch": "orch/blueprint/server-refactor",
+      "startingRef": "main",
+      "dependsOn": [],
+      "agentId": "bc-622d87ae-6de3-4c69-b919-a26f1b8a0181",
+      "runId": "run-52c9c8dd-a9fc-4b3c-9f39-863b6039134a",
+      "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/server-refactor.md",
+      "startedAt": "2026-05-23T18:55:02.400Z",
+      "finishedAt": "2026-05-23T19:03:32.175Z",
+      "lastUpdate": "2026-05-23T19:03:35.055Z",
+      "note": "respawned by local-cli (was error; attempts=1)",
+      "attempts": 2,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": null,
+      "verification": "unit-test-verified"
+    },
+    {
+      "name": "frontend-editable-workspace",
+      "type": "worker",
+      "branch": "orch/blueprint/frontend-editable-workspace",
+      "startingRef": "orch/blueprint/server-refactor",
+      "dependsOn": [
+        "server-refactor"
+      ],
+      "agentId": "bc-d1f60c59-ec35-4812-8909-7c384c66bb78",
+      "runId": "run-fdbf4a37-478c-4ed6-8927-6841c798791d",
+      "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/frontend-editable-workspace.md",
+      "startedAt": "2026-05-23T19:03:35.402Z",
+      "finishedAt": "2026-05-23T19:25:02.501Z",
+      "lastUpdate": "2026-05-23T19:25:04.040Z",
+      "note": null,
+      "attempts": 1,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": null,
+      "verification": "unit-test-verified"
+    },
+    {
+      "name": "rules-rag-upgrade",
+      "type": "worker",
+      "branch": "orch/blueprint/rules-rag-upgrade",
+      "startingRef": "orch/blueprint/server-refactor",
+      "dependsOn": [
+        "server-refactor"
+      ],
+      "agentId": "bc-ee60d91d-66c8-4d0c-be07-c33a1091b955",
+      "runId": "run-f6c7567d-50ef-4287-864d-2bb2bd37ee8e",
+      "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/rules-rag-upgrade.md",
+      "startedAt": "2026-05-23T19:03:38.071Z",
+      "finishedAt": "2026-05-23T19:12:45.870Z",
+      "lastUpdate": "2026-05-23T19:12:46.898Z",
+      "note": null,
+      "attempts": 1,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": null,
+      "verification": "unit-test-verified"
+    },
+    {
+      "name": "rev-catalog-and-supply",
+      "type": "worker",
+      "branch": "orch/blueprint/rev-catalog-and-supply",
+      "startingRef": "orch/blueprint/server-refactor",
+      "dependsOn": [
+        "server-refactor"
+      ],
+      "agentId": "bc-d70b254e-9e7f-4873-95f0-902bec00d31b",
+      "runId": "run-8a56897c-7882-4bc8-a49d-1158e9e3e1d3",
+      "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/rev-catalog-and-supply.md",
+      "startedAt": "2026-05-23T19:03:40.412Z",
+      "finishedAt": "2026-05-23T19:10:33.335Z",
+      "lastUpdate": "2026-05-23T19:10:36.306Z",
+      "note": null,
+      "attempts": 1,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": null,
+      "verification": "unit-test-verified"
+    },
+    {
+      "name": "model-adapter-and-review",
+      "type": "worker",
+      "branch": "orch/blueprint/model-adapter-and-review",
+      "startingRef": "orch/blueprint/server-refactor",
+      "dependsOn": [
+        "server-refactor"
+      ],
+      "agentId": "bc-70d180dd-1d46-4d10-b989-7c062acfdb72",
+      "runId": "run-79302a23-95bd-41dc-8359-e6db12798b92",
+      "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/model-adapter-and-review.md",
+      "startedAt": "2026-05-23T19:03:42.637Z",
+      "finishedAt": "2026-05-23T19:15:45.922Z",
+      "lastUpdate": "2026-05-23T19:15:46.826Z",
+      "note": null,
+      "attempts": 1,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": null,
+      "verification": "unit-test-verified"
+    },
+    {
+      "name": "code-validation-pipeline",
+      "type": "worker",
+      "branch": "orch/blueprint/code-validation-pipeline",
+      "startingRef": "orch/blueprint/server-refactor",
+      "dependsOn": [
+        "server-refactor"
+      ],
+      "agentId": "bc-268b1b44-42ea-4fab-bdc2-b92f864e73c2",
+      "runId": "run-2d375649-5fd6-4543-9afa-150cfc94d4a9",
+      "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/code-validation-pipeline.md",
+      "startedAt": "2026-05-23T19:03:45.623Z",
+      "finishedAt": "2026-05-23T19:13:56.967Z",
+      "lastUpdate": "2026-05-23T19:13:57.840Z",
+      "note": null,
+      "attempts": 1,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": null,
+      "verification": "unit-test-verified"
+    },
+    {
+      "name": "v-frontend-editable",
+      "type": "verifier",
+      "branch": "orch/blueprint/v-frontend-editable",
+      "startingRef": "orch/blueprint/frontend-editable-workspace",
+      "dependsOn": [
+        "frontend-editable-workspace"
+      ],
+      "agentId": null,
+      "runId": null,
+      "parentAgentId": null,
+      "status": "error",
+      "resultStatus": null,
+      "handoffPath": null,
+      "startedAt": "2026-05-23T19:25:12.642Z",
+      "finishedAt": null,
+      "lastUpdate": "2026-05-23T19:25:12.880Z",
+      "note": "spawn failed after 3 transient sub-attempts: l: [usage_limit_exceeded] Usage-based pricing required. Background Agent requires at least $2 remaining until your hard limit. Enable usage-based pricing and set a Spend Limit at https://www.cursor.co…",
+      "attempts": 1,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": "unknown",
+      "verification": null
+    },
+    {
+      "name": "v-rules-rag",
+      "type": "verifier",
+      "branch": "orch/blueprint/v-rules-rag",
+      "startingRef": "orch/blueprint/rules-rag-upgrade",
+      "dependsOn": [
+        "rules-rag-upgrade"
+      ],
+      "agentId": null,
+      "runId": null,
+      "parentAgentId": null,
+      "status": "error",
+      "resultStatus": null,
+      "handoffPath": null,
+      "startedAt": "2026-05-23T19:12:56.247Z",
+      "finishedAt": null,
+      "lastUpdate": "2026-05-23T19:12:56.698Z",
+      "note": "spawn failed after 3 transient sub-attempts: l: [validation_error] Upgrade to Ultra for more Cloud Agents: You've reached the limit for your current plan. Upgrade to Ultra to run more Cloud Agents simultaneously.",
+      "attempts": 1,
+      "slackTs": null,
+      "prNumber": null,
+      "failureMode": "unknown",
+      "verification": null
+    }
+  ],
+  "attention": [
+    {
+      "at": "2026-05-23T18:53:15.055Z",
+      "message": "server-refactor: spawn failed after 3 transient sub-attempts: l: [invalid_model] Model 'gpt-5.5' does not match a known variant. Call GET /v1/models to list valid id+params combinations. run `bun cli.ts models --check` to re-probe the catalog against /v1/agents."
+    },
+    {
+      "at": "2026-05-23T18:54:27.887Z",
+      "message": "server-refactor: respawned by local-cli (was error)"
+    },
+    {
+      "at": "2026-05-23T19:03:35.055Z",
+      "message": "server-refactor: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:10:36.306Z",
+      "message": "rev-catalog-and-supply: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:12:46.899Z",
+      "message": "rules-rag-upgrade: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:12:57.655Z",
+      "message": "v-rules-rag: spawn failed after 3 transient sub-attempts: l: [validation_error] Upgrade to Ultra for more Cloud Agents: You've reached the limit for your current plan. Upgrade to Ultra to run more Cloud Agents simultaneously."
+    },
+    {
+      "at": "2026-05-23T19:13:57.840Z",
+      "message": "code-validation-pipeline: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:15:46.826Z",
+      "message": "model-adapter-and-review: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:25:04.040Z",
+      "message": "frontend-editable-workspace: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:25:14.299Z",
+      "message": "v-frontend-editable: spawn failed after 3 transient sub-attempts: l: [usage_limit_exceeded] Usage-based pricing required. Background Agent requires at least $2 remaining until your hard limit. Enable usage-based pricing and set a Spend Limit at https://www.cursor.co…"
+    }
+  ]
+}
