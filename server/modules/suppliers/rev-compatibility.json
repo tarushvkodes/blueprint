@@ -1,0 +1,44 @@
+{
+  "REV-41-1301": {
+    "compatibleSkus": [
+      "REV-41-1600",
+      "REV-45-1655",
+      "REV-21-3009"
+    ],
+    "requiredAccessories": [
+      "REV-41-1165",
+      "REV-41-1302"
+    ]
+  },
+  "REV-41-1600": {
+    "compatibleSkus": [
+      "REV-41-1301",
+      "REV-45-1655",
+      "REV-45-1883"
+    ],
+    "requiredAccessories": [
+      "REV-41-1165"
+    ]
+  },
+  "REV-45-1655": {
+    "compatibleSkus": [
+      "REV-41-1301",
+      "REV-41-1600",
+      "REV-45-1883"
+    ],
+    "requiredAccessories": [
+      "REV-45-2210",
+      "REV-45-2211"
+    ]
+  },
+  "REV-45-1883": {
+    "compatibleSkus": [
+      "REV-45-1655",
+      "REV-41-1600"
+    ],
+    "requiredAccessories": [
+      "REV-45-2210",
+      "REV-45-2211"
+    ]
+  }
+}
