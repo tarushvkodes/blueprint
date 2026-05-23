@@ -211,6 +211,10 @@
     {
       "at": "2026-05-23T19:12:46.899Z",
       "message": "rules-rag-upgrade: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:12:57.655Z",
+      "message": "v-rules-rag: spawn failed after 3 transient sub-attempts: l: [validation_error] Upgrade to Ultra for more Cloud Agents: You've reached the limit for your current plan. Upgrade to Ultra to run more Cloud Agents simultaneously."
     }
   ]
 }
