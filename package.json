@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:smoke": "node server/smoke-test.js",
+    "test:rules": "node --test server/__tests__/rules.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

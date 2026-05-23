@@ -1,3 +1,5 @@
+import { assertCitable } from '../modules/chat.js';
+
 export default function register(app, deps) {
   const {
     projects,
@@ -12,7 +14,18 @@ export default function register(app, deps) {
     try {
       const project = await projects.loadProject(req.params.id) || getDemoProject();
       const message = String(req.body?.message || '');
-      const citations = rules.quoteRule(message);
+      const documentIds = project?.documents?.length ? project.documents : null;
+      const citable = assertCitable(message, req.params.id, { rules, documentIds });
+      if (citable.refused) {
+        return res.json({
+          answer: citable.message,
+          citations: [],
+          catalogHits: [],
+          generatedBy: 'rules-refusal',
+          suggestedActions: ['upload current FTC manual', 'link official FIRST manual'],
+        });
+      }
+      const citations = citable.citations.length ? citable.citations : rules.quoteRule(message, { documentIds });
       const catalogHits = catalogApi.searchCatalog(message, 3);
       const aiResult = await ai.callVertexJson({
         prompt: [
