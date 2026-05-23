@@ -59,7 +59,7 @@ function parsePdfDate(value) {
 function extractVersionValue(value) {
   const source = String(value || '');
   if (!source) return null;
-  const teamUpdate = source.match(/\b(?:TU|Team Update)\s*#?\s*(\d{1,3})\b/i);
+  const teamUpdate = source.match(/(?:^|[^A-Za-z0-9])(?:TU|Team Update)\s*#?\s*(\d{1,3})(?:$|[^A-Za-z0-9])/i);
   if (teamUpdate) return `TU${teamUpdate[1]}`;
   const version = source.match(/\b(?:version|revision|rev)\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9._-]{0,24})\b/i);
   if (version) return version[1];
