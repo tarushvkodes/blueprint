@@ -228,6 +228,10 @@
     {
       "at": "2026-05-23T19:25:04.040Z",
       "message": "frontend-editable-workspace: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:25:14.299Z",
+      "message": "v-frontend-editable: spawn failed after 3 transient sub-attempts: l: [usage_limit_exceeded] Usage-based pricing required. Background Agent requires at least $2 remaining until your hard limit. Enable usage-based pricing and set a Spend Limit at https://www.cursor.co…"
     }
   ]
 }
