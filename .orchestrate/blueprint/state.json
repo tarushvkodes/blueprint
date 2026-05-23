@@ -58,12 +58,12 @@
       "agentId": "bc-ee60d91d-66c8-4d0c-be07-c33a1091b955",
       "runId": "run-f6c7567d-50ef-4287-864d-2bb2bd37ee8e",
       "parentAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
-      "status": "running",
-      "resultStatus": null,
-      "handoffPath": null,
+      "status": "handed-off",
+      "resultStatus": "finished",
+      "handoffPath": "handoffs/rules-rag-upgrade.md",
       "startedAt": "2026-05-23T19:03:38.071Z",
-      "finishedAt": null,
-      "lastUpdate": "2026-05-23T19:03:40.411Z",
+      "finishedAt": "2026-05-23T19:12:45.870Z",
+      "lastUpdate": "2026-05-23T19:12:45.871Z",
       "note": null,
       "slackTs": null,
       "prNumber": null,
@@ -87,12 +87,12 @@
       "handoffPath": "handoffs/rev-catalog-and-supply.md",
       "startedAt": "2026-05-23T19:03:40.412Z",
       "finishedAt": "2026-05-23T19:10:33.335Z",
-      "lastUpdate": "2026-05-23T19:10:33.337Z",
+      "lastUpdate": "2026-05-23T19:10:36.306Z",
       "note": null,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
-      "verification": null,
+      "verification": "unit-test-verified",
       "attempts": 1
     },
     {
@@ -202,6 +202,10 @@
     {
       "at": "2026-05-23T19:03:35.055Z",
       "message": "server-refactor: verification self-reported (unit-test-verified)"
+    },
+    {
+      "at": "2026-05-23T19:10:36.306Z",
+      "message": "rev-catalog-and-supply: verification self-reported (unit-test-verified)"
     }
   ]
 }
