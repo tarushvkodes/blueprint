@@ -1,0 +1,314 @@
+{
+  "$schema": "../../../../home/ubuntu/.cursor/plugins/cache/cursor-public/9333/3347cbab5b54136f6fba0994c3a01a56f7fb7fca/skills/orchestrate/schemas/plan.schema.json",
+  "goal": "Implement Blueprint per context.md",
+  "summary": "Push Blueprint (FTC engineering workspace) along context.md milestones: modular server + persistence, editable workspace UI, manual ingestion upgrades, REV catalog upgrades, model adapter + review agent, and generated-code compile validation.",
+  "rootSlug": "blueprint",
+  "baseBranch": "main",
+  "prBase": "main",
+  "repoUrl": "https://github.com/tarushvkodes/blueprint",
+  "selfAgentId": "bc-68bf9144-0ce5-4561-9872-ba3af8217e25",
+  "syncStateToGit": true,
+  "acceptanceCriteria": [
+    "Server is modularized so multiple feature slices can extend Blueprint without rewriting `server/index.js`.",
+    "Projects persist on disk so workspace edits survive restarts.",
+    "Frontend exposes a real project wizard, editable artifacts, manual/inventory/log upload UI, and substitution + refusal flows.",
+    "Manual ingestion records page numbers, sections, rule numbers, manual version, checksum, and refuses uncited legal claims.",
+    "REV catalog supports discovery beyond seed URLs, normalized categories, mechanical/electrical metadata, manual price overrides, and a supplier interface ready for goBILDA/AndyMark.",
+    "Model adapter is provider-neutral, validates LLM output with schemas, gates final plans through a Review Agent, and stores generated artifacts + a prompt audit trail per project.",
+    "Generated FTC SDK Java compiles in a fixture project via a CI workflow and surfaces compile errors through the API."
+  ],
+  "tasks": [
+    {
+      "name": "server-refactor",
+      "type": "worker",
+      "openPR": true,
+      "model": "gpt-5.5-high",
+      "maxAttempts": 2,
+      "scopedGoal": "Refactor `server/index.js` (currently a single ~1645-line module that mixes ingestion, RAG, REV catalog, generators, AI, exports, and Express wiring) into a small, cleanly-layered server package while preserving every existing API contract and behavior. Goals: (1) extract domain modules under `server/modules/` (e.g. `ai.js`, `rules.js`, `catalog.js`, `generators.js`, `code.js`, `cad.js`, `build.js`, `physics.js`, `chat.js`, `drivers.js`, `grants.js`, `persistence.js`) and route handlers under `server/routes/` (one file per resource group, mirroring the URL prefixes — `health.js`, `ai.js`, `projects.js`, `documents.js`, `catalog.js`, `code.js`, `cad.js`, `build.js`, `physics.js`, `chat.js`, `drivers.js`, `grants.js`). (2) Reduce `server/index.js` to env loading, dependency wiring, route registration, and `app.listen`. (3) Add a `server/modules/persistence.js` JSON-on-disk project store under `.cache/projects/<id>.json` that replaces the in-memory `state.projects` Map but keeps the same async-friendly API (`saveProject`, `loadProject`, `listProjects`, `updateProject`) so projects survive restarts and intake/generate edits persist. The demo project must still resolve via `/api/project/demo`. (4) Keep every URL path, request/response shape, and side effect identical (the existing frontend in `src/` must not need any change to run against the refactored server). Document the new file layout in a short `server/README.md` so downstream slice workers know which module/route file to touch. Use ES modules, keep style consistent with the existing code, and add an npm script `npm run test:smoke` that boots the API on an ephemeral port and asserts `/api/health`, `/api/project/demo`, and `/api/ai/status` all respond 200. After pushing your branch, open a draft PR against `main` titled `Modularize Blueprint server + add project persistence`.",
+      "pathsAllowed": [
+        "server/**",
+        "package.json",
+        "package-lock.json"
+      ],
+      "pathsForbidden": [
+        "src/**",
+        "public/**",
+        ".orchestrate/**"
+      ],
+      "acceptance": [
+        "server/index.js shrinks to wiring + listen; no inline handler bodies > ~10 lines remain.",
+        "server/modules/ contains at least: ai.js, rules.js, catalog.js, generators.js, code.js, cad.js, build.js, physics.js, chat.js, drivers.js, grants.js, persistence.js.",
+        "server/routes/ contains one route file per URL prefix, each `export default function register(app, deps) { ... }`.",
+        "Project persistence stores projects under .cache/projects/<id>.json and reloads on boot.",
+        "All previously listed endpoints continue to work; the existing frontend renders /api/project/demo without modification.",
+        "`npm run lint` passes.",
+        "`npm run build` passes.",
+        "`npm run test:smoke` passes (boots the API, hits /api/health, /api/project/demo, /api/ai/status, expects 200).",
+        "server/README.md documents which module/route file owns each feature area."
+      ],
+      "verify": "## Setup\n- `npm install` if needed.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `npm run test:smoke`\n\n## Manual\n- `node server/index.js &` (port 8787)\n- `curl -s localhost:8787/api/health` returns ok json.\n- `curl -s localhost:8787/api/project/demo | jq '.team.name'` returns a string.\n- Stop the server, restart it, then `curl -s -X POST -H 'content-type: application/json' -d '{\"team\":{\"name\":\"Persist Test\",\"number\":\"9999\",\"location\":\"VA\",\"experience\":\"Beginner\",\"students\":5,\"mentors\":1,\"budget\":1200,\"supplier\":\"REV Robotics\",\"manual\":\"sample\"}}' localhost:8787/api/projects | jq '.id'` and re-fetch via `curl -s localhost:8787/api/projects/<id> | jq '.team.name'` after a server restart — the project must still be there.\n\n## Gotchas\n- Don't change any URL paths or request/response shapes; downstream slices depend on stability.\n- Preserve the existing fallback project shape so the frontend `fallbackProject` keeps working."
+    },
+    {
+      "name": "frontend-editable-workspace",
+      "type": "worker",
+      "openPR": true,
+      "dependsOn": ["server-refactor"],
+      "startingRef": "orch/blueprint/server-refactor",
+      "model": "claude-opus-4-7",
+      "maxAttempts": 2,
+      "scopedGoal": "Turn the Blueprint workspace UI into a real project-editing surface, matching context.md Milestone 1 (`Make The Workspace Editable`). Concrete deliverables: (1) Add a multi-step project creation wizard (route + UI) covering every onboarding field in context.md (team name, number, location, experience level, students, mentors, build space, tools, CAD/programming experience, inventory, budget, supplier, timeline, robot priorities, strategy mode). The wizard saves through the existing `POST /api/projects` and `POST /api/projects/:id/intake` endpoints and lands the user in the workspace on completion. (2) Make the Dashboard tab's `Team requirements` form save back to `/api/projects/:id/intake` and refresh project state on success, with optimistic feedback. (3) Make BOM rows editable (qty, price, manual price override, mark as already-owned) calling either an existing or a new minimal `POST /api/projects/:id/bom/update` route added to `server/routes/projects.js` (only that one file may be added if a new endpoint is needed; do NOT touch other server modules). (4) Add real upload UI for season manual PDF (already wired) plus team inventory CSV/JSON and driver-log CSV/JSON, with progress + error states; route inventory and logs through the matching existing endpoints (`/api/projects/:id/documents/upload` for inventory using `type=inventory`, `/api/projects/:id/driver-logs/analyze` for logs). (5) Add a Substitutions UI block on the BOM tab that lets a student swap a part with a `prompt`-driven note (no real catalog lookup required yet) and persists the swap to project state. (6) Add an `Apply suggestion` button in the Chat tab that takes the most recent chat answer and either appends it to project notes (new `team.notes`) or copies it to clipboard with a confirmation. (7) Add a refusal banner that fires when the user asks a rules question in chat and no manual is uploaded (`project.season.isSample === true`), pointing them to upload one first. (8) Make the existing landing CTAs (`Open workspace`, `Start a project`, etc.) route into the wizard for new users and into the workspace for existing ones. Keep styling consistent with the current Liquid Glass / Shader visual language. Update `src/projectData.ts` fallbackProject only if strictly necessary for the wizard demo. After pushing your branch, open a draft PR against `main` titled `Editable Blueprint workspace + project wizard`.",
+      "pathsAllowed": [
+        "src/**",
+        "public/**",
+        "index.html",
+        "server/routes/projects.js"
+      ],
+      "pathsForbidden": [
+        "server/index.js",
+        "server/modules/**",
+        "server/routes/documents.js",
+        "server/routes/catalog.js",
+        "server/routes/ai.js",
+        "server/routes/code.js",
+        "server/routes/cad.js",
+        "server/routes/build.js",
+        "server/routes/physics.js",
+        "server/routes/chat.js",
+        "server/routes/drivers.js",
+        "server/routes/grants.js",
+        ".orchestrate/**"
+      ],
+      "acceptance": [
+        "A multi-step Project Wizard exists, covers every onboarding field in context.md, and creates+seeds a real project via the existing API.",
+        "The Dashboard `Team requirements` form persists edits through /api/projects/:id/intake and updates project state.",
+        "BOM rows are editable (qty, price, override, owned flag) and changes persist (in-memory acceptable if no server endpoint is added; preferred via a new POST /api/projects/:id/bom/update in server/routes/projects.js).",
+        "Upload UI exists for season PDF, inventory file, and driver-log file with progress + error states.",
+        "Substitution UI exists on the BOM tab and persists swaps to project state.",
+        "Apply-suggestion control exists on the Chat tab and either updates project notes or copies the suggestion to clipboard with confirmation.",
+        "Refusal banner appears in the Chat tab when no real manual is uploaded.",
+        "Landing CTAs route new users into the wizard and existing users into the workspace.",
+        "`npm run lint` passes.",
+        "`npm run build` passes."
+      ],
+      "verify": "## Setup\n- `npm install` if needed.\n- Run the refactored API in one shell: `npm run api`.\n- Run vite in another: `npm run web` (or use `npm run dev`).\n\n## Automated\n- `npm run lint`\n- `npm run build`\n\n## Manual (Playwright or browser)\n- Visit http://localhost:5173/ as a new user — landing CTA must open the Project Wizard.\n- Step through every wizard page; on completion the workspace loads with the entered team values.\n- Edit Team requirements on the Dashboard; reload — values persist.\n- Edit a BOM row qty/price; reload — values persist (or remain in-session if no server endpoint was added; document choice in handoff).\n- Upload a small PDF on the Dashboard; the season label updates.\n- Open Chat, ask a rules-ish question while the season is the sample — refusal banner appears.\n- Apply the chat answer — confirmation visible (copied or saved).\n\n## Gotchas\n- Keep the Liquid Glass / Shader visual language intact; don't introduce new heavyweight UI deps.\n- Stay out of `server/modules/**` and other route files to avoid colliding with sibling slices."
+    },
+    {
+      "name": "rules-rag-upgrade",
+      "type": "worker",
+      "openPR": true,
+      "dependsOn": ["server-refactor"],
+      "startingRef": "orch/blueprint/server-refactor",
+      "model": "gpt-5.5-high",
+      "maxAttempts": 2,
+      "scopedGoal": "Make Blueprint's manual ingestion + rules-aware RAG trustworthy enough that downstream agents can cite rules safely (context.md Milestone 2). Concrete deliverables, all confined to the rules/RAG modules created by `server-refactor`: (1) Upgrade `server/modules/rules.js` (or whichever module owns chunking) so PDF parsing preserves per-chunk `page` numbers (use `pdf-parse`'s page callbacks or render+chunk per-page), `section` from real heading detection (not just regex on uppercase paragraphs), `ruleNumber` matching FTC patterns (`R\\d{3}`, `Q\\d{3}`, `G\\d{3}`), and `version` from the document metadata or filename. (2) Compute and store an sha256 `checksum` for every ingested document; surface it in `GET /api/projects/:id/documents` so the frontend can detect a manual being replaced. (3) Add an `official URL ingest` endpoint (e.g. `POST /api/projects/:id/documents/ingest-url` body `{ url }`) that fetches a PDF from a small allow-list of FTC/FIRST domains (`firstinspires.org`, `ftc-resources.firstinspires.org`, `cdn.firstinspires.org`), runs the same chunking, and stores the source URL on every chunk. Reject other domains with a clear error. (4) Add conflict/outdated detection: when ingesting a manual whose `seasonName` matches an existing document but `version` or `checksum` differs, mark the older document `outdated=true` and return a `replacedDocumentId` in the response. (5) Strengthen the rules search endpoint so it returns citations in the exact shape required by context.md (`ruleNumber`, `section`, `sourceDocument`, `version`, `page`, `confidence`, `note`). (6) Add a server-side `assertCitable(prompt, projectId)` helper used by the chat module so any rules-flavored question without indexed citations returns a refusal message (\"Based on what is indexed, I can't cite this safely — please upload or link the current FTC manual and ask again.\"); wire that helper into the existing `/api/projects/:id/chat` route. Keep all changes confined to `server/modules/rules.js`, a new `server/modules/rag.js` if helpful, `server/routes/documents.js`, and a thin call into `server/modules/chat.js` (for the refusal helper only — do not rewrite chat logic). Add a focused node test under `server/__tests__/rules.test.mjs` exercising chunk metadata + refusal behavior. Add it to `npm run test:smoke` or a new `npm run test:rules`. After pushing your branch, open a draft PR against `main` titled `Rules-aware RAG: pages, versions, refusal, official URL ingest`.",
+      "pathsAllowed": [
+        "server/modules/rules.js",
+        "server/modules/rag.js",
+        "server/modules/persistence.js",
+        "server/modules/chat.js",
+        "server/routes/documents.js",
+        "server/routes/chat.js",
+        "server/__tests__/**",
+        "package.json"
+      ],
+      "pathsForbidden": [
+        "server/index.js",
+        "server/modules/ai.js",
+        "server/modules/catalog.js",
+        "server/modules/generators.js",
+        "server/modules/code.js",
+        "server/modules/cad.js",
+        "server/modules/build.js",
+        "server/modules/physics.js",
+        "server/modules/drivers.js",
+        "server/modules/grants.js",
+        "src/**",
+        "public/**",
+        ".orchestrate/**"
+      ],
+      "acceptance": [
+        "Chunks store page number, section, ruleNumber, version, and sourceUrl.",
+        "Every ingested document has an sha256 checksum surfaced through the documents API.",
+        "POST /api/projects/:id/documents/ingest-url accepts FIRST allow-list URLs and rejects others.",
+        "Replacing a manual marks the older doc outdated and returns replacedDocumentId.",
+        "Rules search returns citations in the context.md shape (ruleNumber, section, sourceDocument, version, page, confidence, note).",
+        "Chat refuses uncited rules questions with the documented refusal copy.",
+        "Focused tests pass via `npm run test:rules` or `npm run test:smoke`.",
+        "`npm run lint` passes.",
+        "`npm run build` passes."
+      ],
+      "verify": "## Setup\n- `npm install` if needed.\n- Run the API: `npm run api`.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `npm run test:rules` (or whatever script the worker added; otherwise `npm run test:smoke`).\n\n## Manual\n- POST a small FTC-style PDF to /api/projects/demo/documents/upload — response includes sha256 + version + outdated flag handling.\n- POST a non-allow-list URL to /api/projects/demo/documents/ingest-url — expect 4xx error.\n- POST a chat message like \"Is a 9-inch wheel legal under R401?\" with no manual — expect refusal copy.\n- POST same after a real manual is ingested — expect a cited answer with ruleNumber + page.\n\n## Gotchas\n- pdf-parse's page callbacks may need version bumps; if so, vendor a minimal pager helper rather than overhauling parsing.\n- Be conservative with the allow-list; reject anything you can't validate."
+    },
+    {
+      "name": "rev-catalog-and-supply",
+      "type": "worker",
+      "openPR": true,
+      "dependsOn": ["server-refactor"],
+      "startingRef": "orch/blueprint/server-refactor",
+      "model": "gpt-5.5-high-fast",
+      "maxAttempts": 2,
+      "scopedGoal": "Strengthen the REV catalog + supply engine per context.md Milestone 3 + the Parts Catalog And Supply Engine section. Concrete deliverables, all confined to catalog-related modules and routes: (1) Expand discovery in `server/modules/catalog.js` beyond the seed URL list — add a paginated REV search-page crawler (use `cheerio` against the existing REV BigCommerce storefront) that takes a query string (e.g. `motors`, `wheels`, `linear slides`, `servos`, `control hub`) and walks the first N result pages, deduping by SKU. Be polite: max 1 req/sec, abort cleanly on 4xx/5xx, and cache results under `.cache/rev-catalog.json` exactly like the existing adapter. (2) Normalize categories into a small fixed taxonomy (`drivetrain`, `motors`, `servos`, `sensors`, `structure`, `power`, `wheels`, `slides`, `intake`, `control`, `accessory`) by mapping REV's category strings + product names; expose the normalized category as `catalogProduct.category`. (3) Parse + store mechanical/electrical metadata when present (weight, dimensions, voltage range, stall current, free RPM, encoder ticks) — use the same `BCData.product_attributes` + JSON-LD scraping path the current adapter uses. (4) Add a manual price-override layer: `POST /api/catalog/products/:sku/override { price?, stock?, notes? }` writes to `.cache/rev-overrides.json` and the override wins at search/read time; `DELETE` removes it. (5) Add compatibility + required-accessories fields on the catalog product (manual mapping table is fine for MVP — provide a small `server/modules/suppliers/rev-compatibility.json` seeded with common drivetrain combos), exposed as `catalogProduct.compatibleSkus` and `catalogProduct.requiredAccessories`. (6) Introduce a `SupplierAdapter` interface in `server/modules/suppliers/adapter.js` (`searchProducts`, `getProduct`, `getCadUrl`, `discover`) and make the REV adapter implement it. Stub a `server/modules/suppliers/gobilda.js` and `andymark.js` that throw `NotImplemented` but conform to the interface, so future workers can fill them in without churning the API. (7) Surface a supplier-aware response in `GET /api/catalog/products/:sku` (`supplier: 'rev' | 'gobilda' | 'andymark'`) and accept `?supplier=` on `/api/catalog/search` (default `rev`). Add a focused node test under `server/__tests__/catalog.test.mjs` that validates normalization + override behavior against a recorded HTML fixture. Add an npm script `npm run test:catalog` and wire it into `npm run test:smoke` if convenient. Confine all changes to `server/modules/catalog.js`, `server/modules/suppliers/**`, `server/routes/catalog.js`, `server/__tests__/catalog*`, and `package.json` if a new dep is needed (prefer no new deps; `cheerio` already exists). After pushing your branch, open a draft PR against `main` titled `REV catalog discovery, normalization, overrides, and supplier interface`.",
+      "pathsAllowed": [
+        "server/modules/catalog.js",
+        "server/modules/suppliers/**",
+        "server/routes/catalog.js",
+        "server/__tests__/**",
+        "package.json"
+      ],
+      "pathsForbidden": [
+        "server/index.js",
+        "server/modules/ai.js",
+        "server/modules/rules.js",
+        "server/modules/rag.js",
+        "server/modules/chat.js",
+        "server/modules/generators.js",
+        "server/modules/code.js",
+        "server/modules/cad.js",
+        "server/modules/build.js",
+        "server/modules/physics.js",
+        "server/modules/drivers.js",
+        "server/modules/grants.js",
+        "server/modules/persistence.js",
+        "src/**",
+        "public/**",
+        ".orchestrate/**"
+      ],
+      "acceptance": [
+        "Catalog discovery walks REV search pages beyond the seed URLs (politely) and dedupes by SKU.",
+        "Products carry a normalized category from the documented taxonomy.",
+        "Mechanical/electrical metadata is parsed where present.",
+        "Manual price/stock overrides persist via POST/DELETE and win at read time.",
+        "Compatibility + required-accessories fields are exposed.",
+        "SupplierAdapter interface exists; REV implements it; goBILDA/AndyMark stubs throw NotImplemented but conform.",
+        "Catalog routes accept ?supplier= and return supplier in product responses.",
+        "Focused tests pass.",
+        "`npm run lint` passes.",
+        "`npm run build` passes."
+      ],
+      "verify": "## Setup\n- `npm install` if needed.\n- Run the API: `npm run api`.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `npm run test:catalog` (or `npm run test:smoke` if the worker rolled it in).\n\n## Manual\n- `curl -s -X POST -H 'content-type: application/json' -d '{\"query\":\"motors\",\"limit\":10}' localhost:8787/api/catalog/sync` — completes and seeds catalog beyond the original 9 URLs.\n- `curl -s 'localhost:8787/api/catalog/search?q=motor&supplier=rev' | jq '.[0]'` — returns a normalized category + metadata fields.\n- `curl -s -X POST -d '{\"price\":42.42}' -H 'content-type: application/json' localhost:8787/api/catalog/products/REV-41-1301/override` then `GET /api/catalog/products/REV-41-1301` — price is the override.\n\n## Gotchas\n- Don't spam REV; throttle the crawler and reuse the .cache/rev-catalog.json on subsequent runs.\n- Keep the supplier interface boring; downstream workers will fill goBILDA/AndyMark later."
+    },
+    {
+      "name": "model-adapter-and-review",
+      "type": "worker",
+      "openPR": true,
+      "dependsOn": ["server-refactor"],
+      "startingRef": "orch/blueprint/server-refactor",
+      "model": "gpt-5.5-high",
+      "maxAttempts": 2,
+      "scopedGoal": "Stand up the provider-neutral model adapter + Review Agent gating described in context.md Milestone 4. Concrete deliverables, all confined to AI/agent modules and routes: (1) Replace the direct Vertex call in `server/modules/ai.js` with a `ModelAdapter` interface (`generateJson(prompt, schema, options)`, `generateText(prompt, options)`) backed by at least two implementations: `vertex.js` (current behavior) and `local-fallback.js` (deterministic templating wrapped in the same interface so the rest of the system never branches on provider). The adapter selects the implementation from env (`VERTEX_AI_API_KEY` present → Vertex, else fallback). (2) Add zod-validated structured output: define schemas under `server/modules/agents/schemas/` for the artifacts the existing generators already return (`Concepts`, `Bom`, `Physics`, `BuildGuide`, `Code`, `Chat`), and call `schema.parse()` on every adapter `generateJson` response — on failure, surface a typed `AdapterValidationError` and let the caller fall back deterministically. (3) Add a `Review Agent` in `server/modules/agents/review.js` that takes the full generated plan + project context and returns a structured verdict (`issues[]`, `passed: bool`, `score`) using the same adapter. Wire `POST /api/projects/:id/generate-blueprint` so the response only marks `generatedBy: 'vertex-express'` when the review verdict is `passed`; otherwise return `generatedBy: 'vertex-with-review-issues'` and include the issues in the response. (4) Add per-project artifact storage: under `.cache/projects/<id>/artifacts/<artifactName>-<timestamp>.json` save every generated artifact + the exact prompt + adapter name + model + schema name. Expose `GET /api/projects/:id/artifacts` listing them and `GET /api/projects/:id/artifacts/:filename` returning one. (5) Add a prompt audit trail: append every prompt/response pair (redacting api keys) to `.cache/projects/<id>/audit.log.jsonl`. Expose `GET /api/projects/:id/audit` returning the last N entries. (6) Update `GET /api/projects/:id/prompts` to return the schema-aware prompts the new adapter would send. Add a focused node test under `server/__tests__/adapter.test.mjs` that exercises the fallback adapter and zod validation paths. Wire into `npm run test:adapter`. Confine changes to `server/modules/ai.js`, `server/modules/agents/**`, `server/modules/persistence.js` (only to add artifact-dir helpers), `server/routes/ai.js`, `server/__tests__/**`, and `package.json` (add `zod` as a dependency). After pushing your branch, open a draft PR against `main` titled `Provider-neutral model adapter + Review Agent + artifact audit trail`.",
+      "pathsAllowed": [
+        "server/modules/ai.js",
+        "server/modules/agents/**",
+        "server/modules/persistence.js",
+        "server/routes/ai.js",
+        "server/__tests__/**",
+        "package.json",
+        "package-lock.json"
+      ],
+      "pathsForbidden": [
+        "server/index.js",
+        "server/modules/rules.js",
+        "server/modules/rag.js",
+        "server/modules/catalog.js",
+        "server/modules/suppliers/**",
+        "server/modules/generators.js",
+        "server/modules/code.js",
+        "server/modules/cad.js",
+        "server/modules/build.js",
+        "server/modules/physics.js",
+        "server/modules/chat.js",
+        "server/modules/drivers.js",
+        "server/modules/grants.js",
+        "src/**",
+        "public/**",
+        ".orchestrate/**"
+      ],
+      "acceptance": [
+        "ModelAdapter interface exists with vertex + local-fallback implementations selected via env.",
+        "Generated artifacts are zod-validated; invalid responses raise AdapterValidationError and fall back deterministically.",
+        "Review Agent runs on /api/projects/:id/generate-blueprint and gates `generatedBy` value with structured issues.",
+        "Per-project artifacts persist under .cache/projects/<id>/artifacts/ and are listable + readable via new endpoints.",
+        "Prompt audit trail persists to .cache/projects/<id>/audit.log.jsonl and is queryable.",
+        "/api/projects/:id/prompts reflects the new schema-aware prompts.",
+        "Focused tests pass.",
+        "`npm run lint` passes.",
+        "`npm run build` passes."
+      ],
+      "verify": "## Setup\n- `npm install` (zod will be added).\n- `npm run api`.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `npm run test:adapter`\n\n## Manual\n- Without VERTEX_AI_API_KEY: POST /api/projects/demo/generate-blueprint — completes, generatedBy is local-fallback, artifacts + audit file appear under .cache/projects/demo/.\n- With VERTEX_AI_API_KEY set: same call — generatedBy is `vertex-express` if review passes, else `vertex-with-review-issues` with `issues[]`.\n- `curl -s localhost:8787/api/projects/demo/artifacts | jq` lists artifact files.\n- `curl -s localhost:8787/api/projects/demo/audit | jq` shows recent prompt/response entries with api keys redacted.\n\n## Gotchas\n- Keep zod-validation strict but provide deterministic fallbacks so a single bad LLM response doesn't break the user flow.\n- Redact `VERTEX_AI_API_KEY` and any bearer tokens before writing to audit.log.jsonl."
+    },
+    {
+      "name": "code-validation-pipeline",
+      "type": "worker",
+      "openPR": true,
+      "dependsOn": ["server-refactor"],
+      "startingRef": "orch/blueprint/server-refactor",
+      "model": "gpt-5.5-high",
+      "maxAttempts": 2,
+      "scopedGoal": "Make the generated FTC SDK Java actually compile (context.md Milestone 5). Concrete deliverables, all confined to code-generation modules, a new FTC fixture, and a new CI workflow: (1) Add a minimal FTC SDK fixture under `fixtures/ftc-sdk/` — vendor only enough Gradle + SDK stubs to compile `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/*.java` files (use a tiny `build.gradle` with a fake `RobotCore.jar` stub that exposes the SDK types referenced in the generated code, plus a Gradle wrapper). The goal is *compile-only*; no Android packaging. (2) Update `server/modules/code.js` so `generateCode` produces FTC SDK Java that compiles against the fixture: real package declarations (`package org.firstinspires.ftc.teamcode;`), explicit imports, hardware-name constants from `Constants.java`, motor power clipping, servo range limits, telemetry status, and battery voltage warning (`VoltageSensor`) wired with safe defaults. (3) Add `POST /api/projects/:id/code/validate` in `server/routes/code.js` that writes the current generated code into `fixtures/ftc-sdk/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/` (in a tmp clone) and runs `./gradlew compileJava` with a 90-second timeout, returning `{ ok: bool, errors: [{ file, line, message }], stdout, durationMs }`. (4) Add a GitHub Actions workflow under `.github/workflows/code-validation.yml` that: installs Node + Java 17, runs the API in the background, POSTs to `/api/projects/demo/generate-code`, then POSTs to `/api/projects/demo/code/validate`, and fails the job if `ok === false`. (5) Add a focused node test `server/__tests__/code.test.mjs` that mocks the gradle call and validates the validate endpoint shape. (6) Add an `Intake subsystem class` (`IntakeSubsystem.java`) emitter so the generated set covers the documented MVP. Confine changes to `server/modules/code.js`, `server/routes/code.js`, `fixtures/ftc-sdk/**`, `.github/workflows/code-validation.yml`, `server/__tests__/code*`, and `package.json` only if a new dep (e.g. tmp-promise) is required (prefer node built-ins). Do NOT touch frontend files in this slice. After pushing your branch, open a draft PR against `main` titled `Compile-verified FTC SDK code generation + CI`.",
+      "pathsAllowed": [
+        "server/modules/code.js",
+        "server/routes/code.js",
+        "server/__tests__/**",
+        "fixtures/ftc-sdk/**",
+        ".github/workflows/**",
+        "package.json"
+      ],
+      "pathsForbidden": [
+        "server/index.js",
+        "server/modules/ai.js",
+        "server/modules/rules.js",
+        "server/modules/rag.js",
+        "server/modules/catalog.js",
+        "server/modules/suppliers/**",
+        "server/modules/agents/**",
+        "server/modules/generators.js",
+        "server/modules/cad.js",
+        "server/modules/build.js",
+        "server/modules/physics.js",
+        "server/modules/chat.js",
+        "server/modules/drivers.js",
+        "server/modules/grants.js",
+        "server/modules/persistence.js",
+        "src/**",
+        "public/**",
+        ".orchestrate/**"
+      ],
+      "acceptance": [
+        "fixtures/ftc-sdk/ compiles a sample TeamCode class with `./gradlew compileJava`.",
+        "Generated code includes real package declarations, imports, motor clipping, servo limits, telemetry, voltage warnings, and an IntakeSubsystem class.",
+        "POST /api/projects/:id/code/validate returns structured ok/errors/stdout/durationMs.",
+        ".github/workflows/code-validation.yml runs in CI and fails when validate returns ok=false.",
+        "Focused tests pass.",
+        "`npm run lint` passes.",
+        "`npm run build` passes."
+      ],
+      "verify": "## Setup\n- `npm install`.\n- Install Java 17 if missing (`apt-get install -y openjdk-17-jdk-headless`).\n- `npm run api` in background.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `cd fixtures/ftc-sdk && ./gradlew compileJava` (must succeed standalone).\n- `npm run test:code` (or `npm run test:smoke` if rolled in).\n- `curl -s -X POST localhost:8787/api/projects/demo/code/validate | jq '.ok'` returns `true`.\n\n## Manual\n- Inspect generated TeleOpMain.java / AutoMain.java / IntakeSubsystem.java for compliant FTC SDK patterns.\n- Run the new GitHub Actions workflow locally with `act` if available; otherwise trust CI on the PR.\n\n## Gotchas\n- Keep the FTC SDK stub jar tiny — only the classes the generator references.\n- Use a 90s gradle timeout to keep CI fast and avoid network downloads."
+    },
+    {
+      "name": "v-frontend-editable",
+      "type": "verifier",
+      "verifies": "frontend-editable-workspace",
+      "model": "claude-opus-4-7",
+      "maxAttempts": 2,
+      "scopedGoal": "Verify every acceptance criterion of `frontend-editable-workspace`. Build the frontend, boot the modular API, walk the wizard + each editable surface manually (or via Playwright if scripted), then file evidence in the Verification handoff. Confirm the wizard captures every onboarding field from context.md, edits persist where promised, refusal banner appears, and the landing CTAs route correctly. If something is missing, report `verifier-failed` with a precise gap list rather than re-implementing it.",
+      "acceptance": [
+        "Verification section includes execution evidence (commands run, output snippets) for each acceptance criterion of frontend-editable-workspace.",
+        "Verdict line uses the exact taxonomy: live-ui-verified | unit-test-verified | type-check-only | verifier-blocked | verifier-failed."
+      ],
+      "verify": "## Setup\n- `npm install`.\n- `npm run api` in one shell, `npm run web` in another (or `npm run dev`).\n\n## Automated\n- `npm run lint`\n- `npm run build`\n\n## Manual\n- Walk the wizard end to end against http://localhost:5173/.\n- Test each editable surface; reload to confirm persistence claims.\n- Try a chat question on the sample season to trigger the refusal banner.\n\n## Gotchas\n- This is a verifier; do not modify the worker's code. Report gaps in the handoff."
+    },
+    {
+      "name": "v-rules-rag",
+      "type": "verifier",
+      "verifies": "rules-rag-upgrade",
+      "model": "claude-opus-4-7",
+      "maxAttempts": 2,
+      "scopedGoal": "Verify every acceptance criterion of `rules-rag-upgrade` against the actual server: chunks expose page/section/ruleNumber/version/sourceUrl, documents have sha256 checksums, the FIRST URL ingest endpoint enforces its allow-list, replacing a manual marks the older outdated, rules search returns the documented citation shape, and chat refuses uncited rules questions. Surface concrete command output + response snippets in the Verification handoff. If a criterion is unmet, report `verifier-failed` with a precise gap list.",
+      "acceptance": [
+        "Verification section includes execution evidence (commands run, output snippets) for each acceptance criterion of rules-rag-upgrade.",
+        "Verdict line uses the exact taxonomy: live-ui-verified | unit-test-verified | type-check-only | verifier-blocked | verifier-failed."
+      ],
+      "verify": "## Setup\n- `npm install`.\n- `npm run api`.\n\n## Automated\n- `npm run lint`\n- `npm run build`\n- `npm run test:rules` (or `npm run test:smoke` if rolled in).\n\n## Manual\n- POST a small PDF; inspect chunk metadata via the documents endpoint.\n- POST a forbidden URL; expect 4xx.\n- POST a chat question without a real manual; expect refusal.\n- Replace the manual; expect outdated flag + replacedDocumentId.\n\n## Gotchas\n- Do not modify code; only verify."
+    }
+  ]
+}
