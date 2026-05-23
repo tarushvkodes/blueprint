@@ -22,6 +22,7 @@ export type Team = {
   cadExperience?: string
   programmingExperience?: string
   buildSpace?: string
+  notes?: string
 }
 
 export type Concept = {
@@ -49,6 +50,17 @@ export type BomItem = {
   qty: number
   price: number
   stock: string
+  priceOverride?: number | null
+  owned?: boolean
+  note?: string
+}
+
+export type Substitution = {
+  sku: string
+  originalPart?: string
+  replacement: string
+  note?: string
+  createdAt?: string
 }
 
 export type PhysicsItem = {
@@ -72,6 +84,7 @@ export type ProjectData = {
   concepts: Concept[]
   rules: Rule[]
   bom: BomItem[]
+  substitutions?: Substitution[]
   physics: PhysicsItem[]
   buildSteps: string[]
   buildGuide?: BuildGuideStep[]
@@ -144,6 +157,8 @@ export type ApiConcept = Partial<Concept> & {
 
 export type ApiBomItem = BomItem & {
   total?: number
+  productUrl?: string | null
+  lastChecked?: string | null
 }
 
 export type ApiPhysicsItem = Partial<PhysicsItem> & {
@@ -172,6 +187,7 @@ export type ApiProjectResponse = {
   code?: Record<string, string>
   codeFiles?: string[]
   season?: SeasonSource
+  substitutions?: Substitution[]
   generatedBy?: string
   aiFallbackReason?: string | null
   aiStatus?: AiStatus

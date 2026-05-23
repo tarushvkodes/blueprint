@@ -34,7 +34,9 @@ type LandingPageProps = {
   total: number
   activeAccordion: number
   setActiveAccordion: (index: number) => void
+  isNewUser: boolean
   openWorkspace: (tab?: WorkspaceTab) => void
+  openWizard: () => void
 }
 
 export function LandingPage({
@@ -45,12 +47,16 @@ export function LandingPage({
   total,
   activeAccordion,
   setActiveAccordion,
+  isNewUser,
   openWorkspace,
+  openWizard,
 }: LandingPageProps) {
   const manifestoRef = useRef<HTMLParagraphElement>(null)
   const pinnedRef = useRef<HTMLElement>(null)
 
   useLandingAnimations({ manifestoRef, pinnedRef, refreshKey: project })
+
+  const primaryCtaLabel = isNewUser ? 'Start a project' : 'Open workspace'
 
   return (
     <main className="app-shell overflow-x-hidden w-full max-w-full">
@@ -74,7 +80,7 @@ export function LandingPage({
           ))}
         </div>
         <button className="nav-action" type="button" onClick={() => openWorkspace('Dashboard')}>
-          Open workspace
+          {primaryCtaLabel}
         </button>
       </nav>
 
@@ -91,11 +97,17 @@ export function LandingPage({
           </p>
           <div className="hero-actions">
             <button className="button button-primary" type="button" onClick={() => openWorkspace('Dashboard')}>
-              Generate project <ChevronRight size={18} />
+              {isNewUser ? 'Start a project' : 'Open workspace'} <ChevronRight size={18} />
             </button>
-            <button className="button button-secondary" type="button" onClick={() => openWorkspace('Physics')}>
-              Inspect the math
-            </button>
+            {isNewUser ? (
+              <button className="button button-secondary" type="button" onClick={openWizard}>
+                Launch wizard
+              </button>
+            ) : (
+              <button className="button button-secondary" type="button" onClick={() => openWorkspace('Physics')}>
+                Inspect the math
+              </button>
+            )}
           </div>
           <div className="hero-system-strip liquid-glass" aria-label="Blueprint system summary">
             <span>
@@ -415,7 +427,7 @@ export function LandingPage({
       <footer className="footer-cta">
         <h2>Turn kickoff chaos into a cited, budgeted, buildable first plan.</h2>
         <button className="button button-primary" type="button" onClick={() => openWorkspace('Dashboard')}>
-          Start the workspace
+          {isNewUser ? 'Start a project' : 'Open workspace'}
         </button>
       </footer>
     </main>

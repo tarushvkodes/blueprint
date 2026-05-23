@@ -91,6 +91,7 @@ export const fallbackProject: ProjectData = {
   ],
   rules: [],
   bom: [],
+  substitutions: [],
   physics: [],
   buildSteps: [],
   codeFiles: [],
