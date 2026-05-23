@@ -10,14 +10,14 @@
       "agentId": null,
       "runId": null,
       "parentAgentId": null,
-      "status": "pending",
+      "status": "running",
       "resultStatus": null,
       "handoffPath": null,
-      "startedAt": null,
+      "startedAt": "2026-05-23T18:55:02.400Z",
       "finishedAt": null,
-      "lastUpdate": "2026-05-23T18:54:26.968Z",
+      "lastUpdate": "2026-05-23T18:55:02.400Z",
       "note": "respawned by local-cli (was error; attempts=1)",
-      "attempts": 1,
+      "attempts": 2,
       "slackTs": null,
       "prNumber": null,
       "failureMode": null,
@@ -189,6 +189,10 @@
     {
       "at": "2026-05-23T18:53:15.055Z",
       "message": "server-refactor: spawn failed after 3 transient sub-attempts: l: [invalid_model] Model 'gpt-5.5' does not match a known variant. Call GET /v1/models to list valid id+params combinations. run `bun cli.ts models --check` to re-probe the catalog against /v1/agents."
+    },
+    {
+      "at": "2026-05-23T18:54:27.887Z",
+      "message": "server-refactor: respawned by local-cli (was error)"
     }
   ]
 }
