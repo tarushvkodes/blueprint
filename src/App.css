@@ -1,0 +1,1529 @@
+.app-shell {
+  min-height: 100vh;
+  color: #eef8f0;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(105, 170, 151, 0.28), transparent 34rem),
+    radial-gradient(circle at 82% 16%, rgba(244, 198, 106, 0.2), transparent 30rem),
+    linear-gradient(135deg, #07110e 0%, #121a16 42%, #1d2118 100%);
+}
+
+.app-shell::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  opacity: 0.18;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+}
+
+.nav-shell,
+.hero-section,
+.onboarding-section,
+.bento-section,
+.concept-section,
+.rules-section,
+.physics-section,
+.pinned-section,
+.cad-code-section,
+.build-section,
+.accordion-section,
+.manifesto-section,
+.chat-section,
+.marquee,
+.footer-cta {
+  position: relative;
+  z-index: 1;
+}
+
+.nav-shell {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 20;
+  display: grid;
+  width: min(1180px, calc(100% - 32px));
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(238, 248, 240, 0.16);
+  border-radius: 999px;
+  background: rgba(7, 17, 14, 0.72);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(20px);
+  transform: translateX(-50%);
+}
+
+.brand,
+.nav-action,
+.nav-links button,
+.button {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px 6px 6px;
+  border: 0;
+  color: #eef8f0;
+  background: transparent;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  color: #07110e;
+  background: #f4c66a;
+}
+
+.nav-links {
+  display: flex;
+  justify-content: center;
+  gap: clamp(10px, 2vw, 26px);
+  color: rgba(238, 248, 240, 0.74);
+  font-size: 0.86rem;
+}
+
+.nav-links button {
+  border: 0;
+  color: rgba(238, 248, 240, 0.74);
+  background: transparent;
+  cursor: pointer;
+}
+
+.nav-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 11px 16px;
+  border-radius: 999px;
+  color: #07110e;
+  background: #eef8f0;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.hero-section {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.72fr);
+  gap: clamp(34px, 5vw, 80px);
+  align-items: center;
+  padding: 120px clamp(22px, 5vw, 76px) 80px;
+  overflow: hidden;
+}
+
+.hero-wash {
+  position: absolute;
+  right: -20vw;
+  bottom: -28vh;
+  width: 70vw;
+  height: 70vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(184, 216, 255, 0.16), transparent 62%);
+  filter: blur(6px);
+}
+
+.hero-copy {
+  max-width: 76rem;
+}
+
+.eyebrow {
+  margin: 0 0 28px;
+  color: #f4c66a;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-copy h1,
+.section-heading h2,
+.split-heading h2,
+.pinned-title h2,
+.code-panel h2,
+.chat-card h2,
+.footer-cta h2 {
+  margin: 0;
+  font-family: Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.hero-copy h1 {
+  max-width: 72rem;
+  font-size: clamp(2.85rem, 4.6vw, 5.35rem);
+  line-height: 0.98;
+}
+
+.hero-lede {
+  max-width: 44rem;
+  margin: 28px 0 0;
+  color: rgba(238, 248, 240, 0.76);
+  font-size: clamp(1.03rem, 1.4vw, 1.28rem);
+  line-height: 1.65;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 38px;
+}
+
+.button {
+  border: 0;
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-weight: 850;
+  transition: transform 240ms ease, box-shadow 240ms ease, background 240ms ease;
+  cursor: pointer;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+}
+
+.button-primary {
+  color: #07110e;
+  background: #f4c66a;
+  box-shadow: 0 18px 46px rgba(244, 198, 106, 0.22);
+}
+
+.button-secondary {
+  border: 1px solid rgba(238, 248, 240, 0.28);
+  color: #eef8f0;
+  background: rgba(238, 248, 240, 0.08);
+}
+
+.hero-visual {
+  min-height: 620px;
+}
+
+.workspace-card {
+  position: relative;
+  min-height: 620px;
+  overflow: hidden;
+  border: 1px solid rgba(238, 248, 240, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(7, 17, 14, 0.44), rgba(7, 17, 14, 0.74)),
+    url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1920w/products/294/856/REV-45-3529-FTC_Starter_Kit_V3.1-FINAL_1__04896.1721829496__53991.1754583814.png") center/cover;
+  box-shadow: 0 34px 110px rgba(0, 0, 0, 0.38);
+}
+
+.workspace-card canvas,
+.cad-panel canvas {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 430px;
+}
+
+.workspace-topline,
+.workspace-footer {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  color: rgba(238, 248, 240, 0.84);
+}
+
+.workspace-topline {
+  top: 18px;
+}
+
+.workspace-footer {
+  bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(238, 248, 240, 0.16);
+  border-radius: 8px;
+  background: rgba(7, 17, 14, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.workspace-footer strong {
+  color: #f4c66a;
+}
+
+.onboarding-section,
+.bento-section,
+.concept-section,
+.rules-section,
+.physics-section,
+.cad-code-section,
+.build-section,
+.accordion-section,
+.manifesto-section,
+.chat-section,
+.footer-cta {
+  padding: clamp(7rem, 14vw, 13rem) clamp(22px, 5vw, 76px);
+}
+
+.section-heading,
+.split-heading {
+  max-width: 840px;
+  margin: 0 auto 56px;
+  text-align: center;
+}
+
+.section-heading.wide {
+  max-width: 1040px;
+}
+
+.section-heading h2,
+.split-heading h2,
+.pinned-title h2,
+.chat-card h2,
+.footer-cta h2 {
+  font-size: clamp(2.4rem, 5vw, 5.4rem);
+  line-height: 1;
+}
+
+.section-heading p,
+.split-heading p,
+.pinned-title p,
+.chat-card p {
+  margin: 22px auto 0;
+  color: rgba(238, 248, 240, 0.68);
+  font-size: 1.08rem;
+  line-height: 1.7;
+}
+
+.profile-grid {
+  display: grid;
+  max-width: 1120px;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 18px;
+  margin: 0 auto;
+}
+
+.profile-panel,
+.priority-panel,
+.feature-card,
+.rules-panel,
+.bom-panel,
+.physics-card,
+.code-panel,
+.chat-card {
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  background: rgba(238, 248, 240, 0.065);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(18px);
+}
+
+.profile-panel {
+  padding: 28px;
+}
+
+.profile-panel h3 {
+  margin: 0 0 30px;
+  font-size: 1.6rem;
+}
+
+.profile-panel dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0;
+}
+
+.profile-panel dt {
+  color: rgba(238, 248, 240, 0.52);
+  font-size: 0.78rem;
+}
+
+.profile-panel dd {
+  margin: 4px 0 0;
+  color: #f4c66a;
+  font-size: 1.18rem;
+  font-weight: 800;
+}
+
+.priority-panel {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  padding: 1px;
+}
+
+.priority-panel span {
+  display: flex;
+  min-height: 154px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px;
+  background: rgba(7, 17, 14, 0.42);
+  color: rgba(238, 248, 240, 0.78);
+  font-weight: 750;
+}
+
+.priority-panel svg {
+  color: #87d7bc;
+}
+
+.feature-grid {
+  display: grid;
+  max-width: 1160px;
+  min-height: 620px;
+  grid-auto-flow: dense;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: minmax(140px, auto);
+  gap: 16px;
+  margin: 0 auto;
+}
+
+.feature-card {
+  position: relative;
+  overflow: hidden;
+  padding: 28px;
+  text-align: left;
+}
+
+.feature-large {
+  grid-column: span 4;
+  grid-row: span 2;
+}
+
+.feature-tall {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.feature-wide {
+  grid-column: span 3;
+  grid-row: span 2;
+}
+
+.feature-card-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.42;
+  background: url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1280w/products/493/1375/REV-41-0000-15mmMetalMotionBrackets-Hero-final__04816.1654613290__60025.1773776055.png") center/cover;
+  filter: grayscale(0.55) contrast(1.2);
+  transition: transform 700ms ease;
+}
+
+.feature-card:nth-child(1) .feature-card-bg {
+  background-image: url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1920w/products/294/856/REV-45-3529-FTC_Starter_Kit_V3.1-FINAL_1__04896.1721829496__53991.1754583814.png");
+}
+
+.feature-card:nth-child(2) .feature-card-bg {
+  background-image: url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1280w/products/134/518/Ultraplanetary-noflag-FINAL__33728.1650563601__62500.1751473478.png");
+}
+
+.feature-card:nth-child(3) .feature-card-bg {
+  background-image: url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1280w/products/493/1375/REV-41-0000-15mmMetalMotionBrackets-Hero-final__04816.1654613290__60025.1773776055.png");
+}
+
+.feature-card:nth-child(4) .feature-card-bg {
+  background-image: url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1280w/products/512/1429/REV-31-1299_BatteryAccessories_FAMILY_FINAL__19107.1778597435.png");
+}
+
+.feature-card:hover .feature-card-bg {
+  transform: scale(1.05);
+}
+
+.feature-card::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(180deg, rgba(7, 17, 14, 0.3), rgba(7, 17, 14, 0.9));
+}
+
+.feature-card > *:not(.feature-card-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+.feature-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 8px;
+  color: #07110e;
+  background: #eef8f0;
+}
+
+.feature-card h3 {
+  max-width: 560px;
+  margin: 84px 0 14px;
+  color: #fff8e9;
+  font-size: clamp(1.7rem, 3vw, 3.35rem);
+  line-height: 1;
+}
+
+.feature-card p {
+  max-width: 550px;
+  margin: 0;
+  color: rgba(238, 248, 240, 0.72);
+  line-height: 1.62;
+}
+
+.concept-grid,
+.physics-grid {
+  display: grid;
+  max-width: 1160px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 auto;
+}
+
+.concept-card {
+  min-height: 360px;
+  padding: 24px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  color: #eef8f0;
+  background: rgba(238, 248, 240, 0.06);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 240ms ease, border-color 240ms ease, background 240ms ease;
+}
+
+.concept-card:hover,
+.concept-card.is-selected {
+  border-color: rgba(244, 198, 106, 0.72);
+  background: rgba(244, 198, 106, 0.12);
+  transform: translateY(-5px);
+}
+
+.concept-card span {
+  color: #87d7bc;
+  font-weight: 850;
+}
+
+.concept-card h3 {
+  margin: 56px 0 18px;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.concept-card p {
+  color: rgba(238, 248, 240, 0.72);
+  line-height: 1.6;
+}
+
+.concept-meta {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 40px;
+}
+
+.concept-meta strong {
+  color: #f4c66a;
+  font-size: 1.6rem;
+}
+
+.concept-meta small {
+  color: rgba(238, 248, 240, 0.6);
+}
+
+.data-panels {
+  display: grid;
+  max-width: 1180px;
+  grid-template-columns: 0.84fr 1.16fr;
+  gap: 18px;
+  margin: 0 auto;
+}
+
+.rules-panel,
+.bom-panel,
+.code-panel,
+.chat-card {
+  padding: 26px;
+}
+
+.rules-panel h3,
+.bom-panel h3,
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 22px;
+}
+
+.rule-row,
+.bom-row {
+  border-top: 1px solid rgba(238, 248, 240, 0.12);
+  padding: 18px 0;
+}
+
+.rule-row strong,
+.rule-row span,
+.bom-row span,
+.bom-row strong,
+.bom-row small,
+.bom-row em {
+  display: block;
+}
+
+.rule-row span,
+.rule-row small,
+.bom-row span,
+.bom-row small {
+  color: rgba(238, 248, 240, 0.54);
+}
+
+.rule-row p {
+  margin: 10px 0;
+  color: rgba(238, 248, 240, 0.74);
+  line-height: 1.55;
+}
+
+.bom-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1.3fr 0.8fr 0.5fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.bom-row em {
+  color: #f4c66a;
+  font-style: normal;
+  text-align: right;
+}
+
+.physics-card {
+  overflow: hidden;
+}
+
+.physics-card-media {
+  height: 190px;
+  background:
+    linear-gradient(rgba(7, 17, 14, 0.08), rgba(7, 17, 14, 0.66)),
+    url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1280w/products/134/518/Ultraplanetary-noflag-FINAL__33728.1650563601__62500.1751473478.png") center/cover;
+  transition: transform 700ms ease;
+}
+
+.physics-card:hover .physics-card-media {
+  transform: scale(1.05);
+}
+
+.physics-card > div:last-child {
+  padding: 24px;
+}
+
+.physics-card span {
+  color: #87d7bc;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.physics-card h3 {
+  margin: 10px 0 16px;
+  font-size: 1.7rem;
+}
+
+.physics-card code {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border-radius: 8px;
+  color: #07110e;
+  background: #d9e7dd;
+  font-size: 0.86rem;
+}
+
+.physics-card p,
+.physics-card small {
+  display: block;
+  color: rgba(238, 248, 240, 0.68);
+  line-height: 1.55;
+}
+
+.physics-card strong {
+  display: block;
+  margin: 18px 0 10px;
+  color: #f4c66a;
+}
+
+.pinned-section {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: clamp(34px, 7vw, 110px);
+  padding: clamp(7rem, 14vw, 13rem) clamp(22px, 5vw, 76px);
+}
+
+.pinned-title {
+  align-self: start;
+  max-width: 520px;
+}
+
+.agent-stack {
+  display: grid;
+  gap: 20px;
+}
+
+.agent-card {
+  min-height: 190px;
+  padding: 28px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(238, 248, 240, 0.08), rgba(135, 215, 188, 0.08));
+}
+
+.agent-card span {
+  color: #f4c66a;
+  font-weight: 900;
+}
+
+.agent-card p {
+  max-width: 680px;
+  margin: 36px 0 0;
+  font-size: clamp(1.22rem, 2vw, 2rem);
+  line-height: 1.18;
+}
+
+.cad-code-section {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 18px;
+}
+
+.cad-panel {
+  position: relative;
+  min-height: 610px;
+  overflow: hidden;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(7, 17, 14, 0.18), rgba(7, 17, 14, 0.82)),
+    url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1920w/products/294/856/REV-45-3529-FTC_Starter_Kit_V3.1-FINAL_1__04896.1721829496__53991.1754583814.png") center/cover;
+}
+
+.cad-overlay {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(7, 17, 14, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.code-panel h2 {
+  font-size: clamp(2rem, 3.6vw, 4.4rem);
+  line-height: 1;
+}
+
+.code-panel pre {
+  overflow: auto;
+  margin: 30px 0;
+  padding: 20px;
+  border: 1px solid rgba(238, 248, 240, 0.12);
+  border-radius: 8px;
+  background: #07110e;
+  color: #d9e7dd;
+  line-height: 1.55;
+}
+
+.file-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-row span {
+  padding: 8px 10px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 999px;
+  color: rgba(238, 248, 240, 0.72);
+  font-size: 0.82rem;
+}
+
+.timeline {
+  display: grid;
+  max-width: 980px;
+  gap: 12px;
+  margin: 0 auto;
+}
+
+.timeline article {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(238, 248, 240, 0.12);
+  border-radius: 8px;
+  background: rgba(238, 248, 240, 0.06);
+}
+
+.timeline span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  color: #07110e;
+  background: #87d7bc;
+  font-weight: 900;
+}
+
+.timeline p {
+  margin: 0;
+  color: rgba(238, 248, 240, 0.78);
+  line-height: 1.55;
+}
+
+.horizontal-accordion {
+  display: flex;
+  max-width: 1180px;
+  min-height: 420px;
+  gap: 12px;
+  margin: 0 auto;
+}
+
+.accordion-slice {
+  flex: 1;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  color: #eef8f0;
+  background:
+    linear-gradient(rgba(7, 17, 14, 0.34), rgba(7, 17, 14, 0.82)),
+    url("https://cdn11.bigcommerce.com/s-ptue0aayqe/images/stencil/1280w/products/294/856/REV-45-3529-FTC_Starter_Kit_V3.1-FINAL_1__04896.1721829496__53991.1754583814.png") center/cover;
+  text-align: left;
+  cursor: pointer;
+  transition: flex 480ms ease, filter 480ms ease;
+}
+
+.accordion-slice.open {
+  flex: 3.2;
+}
+
+.accordion-slice h3 {
+  margin: 110px 0 18px;
+  font-size: 2rem;
+}
+
+.accordion-slice p {
+  max-width: 430px;
+  margin: 0;
+  color: rgba(238, 248, 240, 0.72);
+  line-height: 1.62;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.accordion-slice.open p {
+  opacity: 1;
+}
+
+.manifesto-section {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
+.manifesto-section p {
+  max-width: 1180px;
+  margin: 0 auto;
+  color: #eef8f0;
+  font-size: clamp(2.2rem, 4.8vw, 5.2rem);
+  font-weight: 760;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.chat-card {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 72px);
+  text-align: center;
+}
+
+.chat-card svg {
+  color: #f4c66a;
+}
+
+.prompt-bar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  max-width: 760px;
+  margin: 36px auto 0;
+  padding: 8px;
+  border: 1px solid rgba(238, 248, 240, 0.16);
+  border-radius: 999px;
+  background: rgba(7, 17, 14, 0.55);
+  text-align: left;
+}
+
+.prompt-bar span {
+  overflow: hidden;
+  padding: 13px 14px;
+  color: rgba(238, 248, 240, 0.68);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-bar button {
+  min-width: 88px;
+  border: 0;
+  border-radius: 999px;
+  color: #07110e;
+  background: #f4c66a;
+  font-weight: 900;
+}
+
+.marquee {
+  display: flex;
+  overflow: hidden;
+  gap: 32px;
+  padding: 30px 0;
+  border-top: 1px solid rgba(238, 248, 240, 0.1);
+  border-bottom: 1px solid rgba(238, 248, 240, 0.1);
+}
+
+.marquee div {
+  display: flex;
+  min-width: max-content;
+  animation: marquee 28s linear infinite;
+  align-items: center;
+  gap: 32px;
+}
+
+.marquee span {
+  color: rgba(238, 248, 240, 0.82);
+  font-size: clamp(1.6rem, 3vw, 3.4rem);
+  font-weight: 850;
+}
+
+.footer-cta {
+  text-align: center;
+}
+
+.footer-cta h2 {
+  max-width: 1060px;
+  margin: 0 auto 34px;
+}
+
+.workspace-screen {
+  min-height: 100vh;
+  padding: 24px clamp(16px, 4vw, 54px) 80px;
+}
+
+.workspace-nav {
+  position: sticky;
+  top: 16px;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 999px;
+  background: rgba(7, 17, 14, 0.82);
+  backdrop-filter: blur(20px);
+}
+
+.workspace-brand {
+  min-width: 150px;
+}
+
+.workspace-tabs {
+  display: flex;
+  min-width: 0;
+  justify-content: center;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.workspace-tabs button {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  padding: 10px 13px;
+  border-radius: 999px;
+  color: rgba(238, 248, 240, 0.68);
+  background: transparent;
+  cursor: pointer;
+}
+
+.workspace-tabs button.is-active {
+  border-color: rgba(244, 198, 106, 0.42);
+  color: #07110e;
+  background: #f4c66a;
+  font-weight: 850;
+}
+
+.workspace-action {
+  min-height: 42px;
+}
+
+.workspace-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
+  gap: 22px;
+  align-items: end;
+  padding: clamp(72px, 10vw, 130px) 0 28px;
+}
+
+.workspace-hero h1 {
+  max-width: 920px;
+  margin: 0;
+  font-size: clamp(3rem, 6vw, 6.8rem);
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.workspace-hero p:not(.eyebrow) {
+  max-width: 760px;
+  color: rgba(238, 248, 240, 0.7);
+  font-size: 1.08rem;
+  line-height: 1.65;
+}
+
+.workspace-command-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  background: rgba(238, 248, 240, 0.07);
+}
+
+.workspace-command-panel button,
+.workspace-card-flat button,
+.workspace-panel-title button,
+.workspace-chat-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  color: #07110e;
+  background: #eef8f0;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.workspace-command-panel span {
+  color: #f4c66a;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.workspace-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.workspace-sidebar {
+  position: sticky;
+  top: 100px;
+  align-self: start;
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-sidebar div,
+.workspace-card-flat,
+.workspace-panel {
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  background: rgba(238, 248, 240, 0.065);
+  backdrop-filter: blur(16px);
+}
+
+.workspace-sidebar div {
+  padding: 18px;
+}
+
+.workspace-sidebar span,
+.workspace-card-flat p,
+.workspace-panel p,
+.workspace-table span,
+.workspace-table small,
+.workspace-physics small,
+.workspace-physics p {
+  color: rgba(238, 248, 240, 0.66);
+}
+
+.workspace-sidebar strong {
+  display: block;
+  margin-top: 7px;
+  color: #f4c66a;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.workspace-card-flat,
+.workspace-panel {
+  padding: 24px;
+}
+
+.workspace-card-flat h2,
+.workspace-panel h2 {
+  margin: 0 0 16px;
+  font-size: clamp(1.65rem, 3vw, 3rem);
+  line-height: 1;
+}
+
+.workspace-card-flat p,
+.workspace-panel p {
+  line-height: 1.62;
+}
+
+.workspace-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.workspace-list span {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 13px;
+  border-radius: 8px;
+  background: rgba(7, 17, 14, 0.35);
+}
+
+.workspace-concepts,
+.workspace-physics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.workspace-concepts button {
+  min-height: 250px;
+  padding: 18px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  color: #eef8f0;
+  background: rgba(7, 17, 14, 0.34);
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-concepts button.is-selected {
+  border-color: rgba(244, 198, 106, 0.72);
+  background: rgba(244, 198, 106, 0.12);
+}
+
+.workspace-concepts span,
+.workspace-physics span {
+  color: #87d7bc;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.workspace-concepts strong {
+  display: block;
+  margin: 42px 0 12px;
+  font-size: 1.45rem;
+  line-height: 1.05;
+}
+
+.workspace-concepts em {
+  color: #f4c66a;
+  font-style: normal;
+}
+
+.workspace-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.workspace-panel-title h2 {
+  margin: 0;
+}
+
+.workspace-panel-title strong {
+  color: #f4c66a;
+  font-size: 1.8rem;
+}
+
+.workspace-table {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(238, 248, 240, 0.1);
+  border-radius: 8px;
+}
+
+.workspace-table div {
+  display: grid;
+  grid-template-columns: 0.8fr 1.4fr 0.8fr 0.6fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  background: rgba(7, 17, 14, 0.36);
+}
+
+.workspace-table em {
+  color: #f4c66a;
+  font-style: normal;
+  text-align: right;
+}
+
+.workspace-physics article {
+  padding: 18px;
+  border: 1px solid rgba(238, 248, 240, 0.12);
+  border-radius: 8px;
+  background: rgba(7, 17, 14, 0.32);
+}
+
+.workspace-physics h3 {
+  margin: 10px 0 12px;
+}
+
+.workspace-physics code,
+.workspace-panel pre {
+  display: block;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 8px;
+  color: #d9e7dd;
+  background: #07110e;
+  line-height: 1.55;
+}
+
+.workspace-physics strong {
+  display: block;
+  margin: 14px 0 8px;
+  color: #f4c66a;
+}
+
+.workspace-timeline {
+  margin: 0;
+}
+
+.workspace-chat-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 8px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 999px;
+  background: rgba(7, 17, 14, 0.36);
+}
+
+.workspace-chat-row span {
+  padding: 12px 14px;
+  color: rgba(238, 248, 240, 0.72);
+}
+
+.workspace-answer {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 8px;
+  background: rgba(135, 215, 188, 0.1);
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.18fr);
+  gap: 14px;
+}
+
+.setup-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid rgba(238, 248, 240, 0.14);
+  border-radius: 8px;
+  background: rgba(7, 17, 14, 0.32);
+}
+
+.setup-card-wide {
+  grid-column: 1 / -1;
+}
+
+.setup-card h3 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+}
+
+.setup-card small,
+.setup-card em {
+  color: rgba(238, 248, 240, 0.66);
+}
+
+.file-upload {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: #07110e;
+  background: #f4c66a;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.file-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.setup-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.setup-form label {
+  display: grid;
+  gap: 6px;
+  color: rgba(238, 248, 240, 0.72);
+  font-size: 0.9rem;
+}
+
+.setup-form label.wide {
+  grid-column: 1 / -1;
+}
+
+.setup-form input,
+.setup-form textarea,
+.setup-form select {
+  width: 100%;
+  border: 1px solid rgba(238, 248, 240, 0.16);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: #eef8f0;
+  background: rgba(7, 17, 14, 0.64);
+}
+
+.setup-form textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.setup-actions,
+.artifact-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.setup-actions button,
+.artifact-buttons button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 16px;
+  color: #07110e;
+  background: #eef8f0;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - 32px));
+  }
+}
+
+@media (max-width: 980px) {
+  .nav-shell {
+    grid-template-columns: 1fr auto;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .hero-section,
+  .profile-grid,
+  .data-panels,
+  .pinned-section,
+  .cad-code-section {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-section {
+    padding-top: 110px;
+  }
+
+  .hero-visual,
+  .workspace-card,
+  .cad-panel {
+    min-height: 480px;
+  }
+
+  .priority-panel,
+  .concept-grid,
+  .physics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .feature-large,
+  .feature-tall,
+  .feature-wide {
+    grid-column: span 1;
+    grid-row: span 1;
+  }
+
+  .bom-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bom-row em {
+    text-align: left;
+  }
+
+  .horizontal-accordion {
+    flex-direction: column;
+  }
+
+  .accordion-slice,
+  .accordion-slice.open {
+    flex: 1;
+  }
+
+  .workspace-nav,
+  .workspace-hero,
+  .workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-nav {
+    border-radius: 8px;
+  }
+
+  .workspace-brand,
+  .workspace-action {
+    justify-self: start;
+  }
+
+  .workspace-tabs {
+    justify-content: start;
+    order: 3;
+  }
+
+  .workspace-sidebar {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-grid,
+  .workspace-concepts,
+  .workspace-physics,
+  .setup-grid,
+  .setup-form {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-table div {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-table em {
+    text-align: left;
+  }
+}
+
+@media (max-width: 620px) {
+  .nav-action {
+    display: none;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2.6rem, 13vw, 4.4rem);
+  }
+
+  .hero-actions,
+  .prompt-bar {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .prompt-bar {
+    border-radius: 8px;
+  }
+
+  .prompt-bar span {
+    white-space: normal;
+  }
+
+  .workspace-screen {
+    padding-inline: 14px;
+  }
+
+  .workspace-hero h1 {
+    font-size: clamp(2.6rem, 15vw, 4.4rem);
+  }
+
+  .workspace-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-list,
+  .workspace-chat-row,
+  .workspace-panel-title {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-panel-title {
+    align-items: start;
+  }
+
+  .workspace-chat-row {
+    border-radius: 8px;
+  }
+}
