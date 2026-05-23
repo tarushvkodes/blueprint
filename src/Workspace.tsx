@@ -1,5 +1,4 @@
 import {
-  Bot,
   CheckCircle2,
   Download,
   FileText,
@@ -13,6 +12,7 @@ import { useState, type ChangeEvent } from 'react'
 import { artifactUrl } from './api'
 import { codeSample, defaultBlueprintQuestion } from './projectData'
 import { workspaceTabs, type AiStatus, type BuildGuideStep, type ProjectData, type Team, type WorkspaceTab } from './types'
+import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
 
 type WorkspaceProps = {
   project: ProjectData
@@ -82,10 +82,11 @@ export function Workspace({
 
   return (
     <main className="app-shell workspace-screen">
-      <nav className="workspace-nav">
+      <ShaderBackdrop variant="workspace" />
+      <nav className="workspace-nav liquid-glass">
         <button className="brand workspace-brand" type="button" onClick={openLanding} aria-label="Back to Blueprint overview">
           <span className="brand-mark">
-            <Bot size={18} />
+            <LiquidLogoMark size={34} />
           </span>
           Blueprint
         </button>
@@ -116,7 +117,7 @@ export function Workspace({
             grants, and driver-control iteration.
           </p>
         </div>
-        <div className="workspace-command-panel">
+        <div className="workspace-command-panel liquid-glass">
           <button type="button" onClick={syncCatalog}>
             <PackageCheck size={18} />
             Sync REV catalog

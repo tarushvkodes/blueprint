@@ -12,8 +12,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@paper-design/shaders-react": "^0.0.76",
     "@react-three/fiber": "^9.6.1",
+    "@shadergradient/react": "^2.4.20",
     "archiver": "^8.0.0",
+    "camera-controls": "^3.1.2",
     "cheerio": "^1.2.0",
     "concurrently": "^9.2.1",
     "cors": "^2.8.6",
@@ -24,7 +27,8 @@
     "pdf-parse": "^2.4.5",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "three-stdlib": "^2.36.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -33,6 +37,7 @@
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.1",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",

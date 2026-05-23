@@ -1,5 +1,4 @@
 import {
-  Bot,
   Boxes,
   CheckCircle2,
   ChevronRight,
@@ -14,6 +13,7 @@ import {
 import { useRef } from 'react'
 import { useLandingAnimations } from './hooks/useLandingAnimations'
 import { RobotPreview } from './RobotPreview'
+import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
 import {
   agentRows,
   codeSample,
@@ -54,10 +54,11 @@ export function LandingPage({
 
   return (
     <main className="app-shell overflow-x-hidden w-full max-w-full">
-      <nav className="nav-shell">
+      <ShaderBackdrop />
+      <nav className="nav-shell liquid-glass">
         <button className="brand" type="button" onClick={() => openWorkspace('Dashboard')} aria-label="Blueprint workspace">
           <span className="brand-mark">
-            <Bot size={18} />
+            <LiquidLogoMark size={34} />
           </span>
           Blueprint
         </button>
@@ -96,14 +97,40 @@ export function LandingPage({
               Inspect the math
             </button>
           </div>
+          <div className="hero-system-strip liquid-glass" aria-label="Blueprint system summary">
+            <span>
+              <strong>{project.concepts.length}</strong>
+              concepts
+            </span>
+            <span>
+              <strong>${total.toLocaleString()}</strong>
+              selected BOM
+            </span>
+            <span>
+              <strong>{project.team.timelineWeeks}</strong>
+              week build lane
+            </span>
+          </div>
         </div>
         <div className="hero-visual image-scale">
-          <div className="workspace-card">
+          <div className="workspace-card liquid-glass">
             <div className="workspace-topline">
               <span>{project.team.manual}</span>
               <ShieldCheck size={18} />
             </div>
-            <RobotPreview />
+            <div className="robot-stage">
+              <RobotPreview />
+            </div>
+            <div className="hero-hud-grid" aria-label="Selected robot concept">
+              <span>
+                <small>Active concept</small>
+                <strong>{selected.difficulty}</strong>
+              </span>
+              <span>
+                <small>Build time</small>
+                <strong>{selected.buildTime}</strong>
+              </span>
+            </div>
             <div className="workspace-footer">
               <span>{selected.name}</span>
               <strong>${selected.cost.toLocaleString()}</strong>
@@ -120,7 +147,7 @@ export function LandingPage({
           </p>
         </div>
         <div className="profile-grid">
-          <div className="profile-panel">
+          <div className="profile-panel liquid-glass">
             <h3>{project.team.name}</h3>
             <dl>
               <div>
@@ -141,7 +168,7 @@ export function LandingPage({
               </div>
             </dl>
           </div>
-          <div className="priority-panel">
+          <div className="priority-panel liquid-glass">
             {profilePriorities.map((priority) => (
               <span key={priority}>
                 <CheckCircle2 size={16} />
@@ -157,7 +184,7 @@ export function LandingPage({
           {platformModules.map((module) => {
             const Icon = module.icon
             return (
-              <article className={`feature-card group ${module.span}`} key={module.title}>
+              <article className={`feature-card liquid-glass group ${module.span}`} key={module.title}>
                 <div className="feature-card-bg" />
                 <div className="feature-icon">
                   <Icon size={24} />
@@ -181,7 +208,7 @@ export function LandingPage({
         <div className="concept-grid">
           {project.concepts.map((concept, index) => (
             <button
-              className={`concept-card group ${selectedConcept === index ? 'is-selected' : ''}`}
+              className={`concept-card liquid-glass group ${selectedConcept === index ? 'is-selected' : ''}`}
               key={concept.name}
               onClick={() => setSelectedConcept(index)}
               type="button"
@@ -207,7 +234,7 @@ export function LandingPage({
           </p>
         </div>
         <div className="data-panels">
-          <article className="rules-panel">
+          <article className="rules-panel liquid-glass">
             <h3><ShieldCheck size={20} /> Legal checklist</h3>
             {project.rules.map((rule) => (
               <div className="rule-row" key={rule.rule}>
@@ -218,7 +245,7 @@ export function LandingPage({
               </div>
             ))}
           </article>
-          <article className="bom-panel">
+          <article className="bom-panel liquid-glass">
             <div className="panel-title-row">
               <h3><Boxes size={20} /> Bill of materials</h3>
               <strong>${total.toLocaleString()}</strong>
@@ -247,7 +274,7 @@ export function LandingPage({
         </div>
         <div className="physics-grid">
           {project.physics.map((item) => (
-            <article className="physics-card group" key={item.mechanism}>
+            <article className="physics-card liquid-glass group" key={item.mechanism}>
               <div className="physics-card-media image-scale" />
               <div>
                 <span>{item.margin}</span>
@@ -272,7 +299,7 @@ export function LandingPage({
         </div>
         <div className="agent-stack">
           {agentRows.map((row, index) => (
-            <article className="agent-card image-scale" key={row}>
+            <article className="agent-card liquid-glass image-scale" key={row}>
               <span>{String(index + 1).padStart(2, '0')}</span>
               <p>{row}</p>
             </article>
@@ -281,14 +308,14 @@ export function LandingPage({
       </section>
 
       <section className="cad-code-section" id="cad">
-        <div className="cad-panel image-scale">
+        <div className="cad-panel liquid-glass image-scale">
           <RobotPreview />
           <div className="cad-overlay">
             <Layers3 size={20} />
             <span>Conceptual CAD starter: top, side, isometric, wiring, and exploded views.</span>
           </div>
         </div>
-        <div className="code-panel" id="code">
+        <div className="code-panel liquid-glass" id="code">
           <div className="panel-title-row">
             <h2>FTC SDK Java starter code</h2>
             <Cpu size={22} />
@@ -348,7 +375,7 @@ export function LandingPage({
       </section>
 
       <section className="chat-section" id="chat">
-        <div className="chat-card">
+          <div className="chat-card liquid-glass">
           <MessageSquareText size={28} />
           <h2>Project-aware chatbot for iteration.</h2>
           <p>
