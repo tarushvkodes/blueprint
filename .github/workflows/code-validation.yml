@@ -1,0 +1,83 @@
+name: Code Validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - orch/**
+      - cursor/**
+
+jobs:
+  validate-generated-code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start API server
+        run: |
+          npm run api > /tmp/blueprint-api.log 2>&1 &
+          echo $! > /tmp/blueprint-api.pid
+
+      - name: Wait for API health
+        run: |
+          for attempt in {1..60}; do
+            if curl -fsS "http://127.0.0.1:8787/api/health" > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API failed to start"
+          cat /tmp/blueprint-api.log
+          exit 1
+
+      - name: Generate and validate FTC code
+        run: |
+          curl -fsS -X POST "http://127.0.0.1:8787/api/projects/demo/generate-code" \
+            -H "Content-Type: application/json" \
+            -d '{}' > /tmp/generated-code.json
+
+          curl -fsS -X POST "http://127.0.0.1:8787/api/projects/demo/code/validate" \
+            -H "Content-Type: application/json" \
+            -d '{}' > /tmp/validate-code.json
+
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const validation = JSON.parse(readFileSync('/tmp/validate-code.json', 'utf8'));
+          if (!validation || typeof validation.ok !== 'boolean') {
+            console.error('Invalid validation payload shape:', validation);
+            process.exit(1);
+          }
+          if (!validation.ok) {
+            console.error('Generated code validation failed:');
+            console.error(JSON.stringify(validation, null, 2));
+            process.exit(1);
+          }
+          NODE
+
+      - name: Stop API server
+        if: always()
+        run: |
+          if [ -f /tmp/blueprint-api.pid ]; then
+            kill "$(cat /tmp/blueprint-api.pid)" 2>/dev/null || true
+          fi
+          wait || true

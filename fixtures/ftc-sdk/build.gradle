@@ -1,0 +1,24 @@
+plugins {
+  id 'java'
+}
+
+java {
+  sourceCompatibility = JavaVersion.VERSION_17
+  targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation files('libs/RobotCore.jar')
+}
+
+sourceSets {
+  main {
+    java {
+      srcDirs = ['TeamCode/src/main/java']
+    }
+  }
+}

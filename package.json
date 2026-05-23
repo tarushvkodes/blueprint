@@ -9,6 +9,8 @@
     "api": "node server/index.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:code": "node --test server/__tests__/code.test.mjs",
+    "test:smoke": "node server/smoke-test.js",
     "preview": "vite preview"
   },
   "dependencies": {
