@@ -6,6 +6,18 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+export function projectCacheDirFor(rootDir, id) {
+  return path.join(rootDir, '.cache', 'projects', String(id));
+}
+
+export function projectArtifactsDirFor(rootDir, id) {
+  return path.join(projectCacheDirFor(rootDir, id), 'artifacts');
+}
+
+export function projectAuditLogPathFor(rootDir, id) {
+  return path.join(projectCacheDirFor(rootDir, id), 'audit.log.jsonl');
+}
+
 export function createProjectStore({ rootDir }) {
   const projectsDir = path.join(rootDir, '.cache', 'projects');
   const projects = new Map();
@@ -60,6 +72,9 @@ export function createProjectStore({ rootDir }) {
 
   return {
     projectsDir,
+    projectCacheDirFor: (id) => projectCacheDirFor(rootDir, id),
+    projectArtifactsDirFor: (id) => projectArtifactsDirFor(rootDir, id),
+    projectAuditLogPathFor: (id) => projectAuditLogPathFor(rootDir, id),
     saveProject,
     loadProject,
     listProjects,
