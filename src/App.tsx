@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import './App.css'
 import { useBlueprintProject } from './hooks/useBlueprintProject'
-import { LandingPage } from './LandingPage'
-import { Workspace } from './Workspace'
 import type { WorkspaceTab } from './types'
+
+const LandingPage = lazy(() => import('./LandingPage').then((module) => ({ default: module.LandingPage })))
+const Workspace = lazy(() => import('./Workspace').then((module) => ({ default: module.Workspace })))
 
 function App() {
   const {
@@ -61,49 +62,53 @@ function App() {
 
   if (workspaceOpen) {
     return (
-      <Workspace
-        project={project}
-        projectList={projectList}
-        selectedConcept={selectedConcept}
-        total={total}
-        activeTab={activeWorkspaceTab}
-        setActiveTab={setActiveWorkspaceTab}
-        status={workspaceStatus}
-        chatAnswer={chatAnswer}
-        chatSuggestions={chatSuggestions}
-        aiStatus={aiStatus}
-        openLanding={openLanding}
-        createProject={createProject}
-        switchProject={switchProject}
-        regenerateProject={regenerateProject}
-        saveIntake={saveIntake}
-        generateFullBlueprint={generateFullBlueprint}
-        selectDesign={selectDesign}
-        updateBomOverride={updateBomOverride}
-        uploadManual={uploadManual}
-        ingestManualUrl={ingestManualUrl}
-        syncCatalog={syncCatalog}
-        askBlueprint={askBlueprint}
-        applyChatSuggestion={applyChatSuggestion}
-        analyzeDriverLogs={analyzeDriverLogs}
-        downloadCode={downloadCode}
-      />
+      <Suspense fallback={<main className="app-shell route-loading">Loading workspace...</main>}>
+        <Workspace
+          project={project}
+          projectList={projectList}
+          selectedConcept={selectedConcept}
+          total={total}
+          activeTab={activeWorkspaceTab}
+          setActiveTab={setActiveWorkspaceTab}
+          status={workspaceStatus}
+          chatAnswer={chatAnswer}
+          chatSuggestions={chatSuggestions}
+          aiStatus={aiStatus}
+          openLanding={openLanding}
+          createProject={createProject}
+          switchProject={switchProject}
+          regenerateProject={regenerateProject}
+          saveIntake={saveIntake}
+          generateFullBlueprint={generateFullBlueprint}
+          selectDesign={selectDesign}
+          updateBomOverride={updateBomOverride}
+          uploadManual={uploadManual}
+          ingestManualUrl={ingestManualUrl}
+          syncCatalog={syncCatalog}
+          askBlueprint={askBlueprint}
+          applyChatSuggestion={applyChatSuggestion}
+          analyzeDriverLogs={analyzeDriverLogs}
+          downloadCode={downloadCode}
+        />
+      </Suspense>
     )
   }
 
   return (
-    <LandingPage
-      project={project}
-      selected={selected}
-      selectedConcept={selectedConcept}
-      setSelectedConcept={setSelectedConcept}
-      total={total}
-      activeAccordion={activeAccordion}
-      setActiveAccordion={setActiveAccordion}
-      openWorkspace={openWorkspace}
-      startDemo={startDemo}
-      demoRunning={demoRunning}
-    />
+    <Suspense fallback={<main className="app-shell route-loading">Loading Blueprint...</main>}>
+      <LandingPage
+        project={project}
+        selected={selected}
+        selectedConcept={selectedConcept}
+        setSelectedConcept={setSelectedConcept}
+        total={total}
+        activeAccordion={activeAccordion}
+        setActiveAccordion={setActiveAccordion}
+        openWorkspace={openWorkspace}
+        startDemo={startDemo}
+        demoRunning={demoRunning}
+      />
+    </Suspense>
   )
 }
 

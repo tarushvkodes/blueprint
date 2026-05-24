@@ -183,6 +183,49 @@ export function registerRoutes(app, {
     ];
   }
 
+  function projectFromRequest(req, res, { fallbackToDemo = false } = {}) {
+    const project = state.projects.get(req.params.id) || (fallbackToDemo ? demoProject : null);
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return null;
+    }
+    return project;
+  }
+
+  function persistProject(project, { refreshReview = false } = {}) {
+    if (refreshReview) {
+      project.review = reviewProject(project);
+      project.legalChecklist = project.review.legalChecklist;
+    }
+    project.updatedAt = nowIso();
+    if (!project.transient) persistProjects();
+    return project;
+  }
+
+  function updateProjectTeam(project, teamPatch, { requireSeason = false } = {}) {
+    project.team = defaultTeam({ ...project.team, ...(teamPatch || {}) });
+    project.setupValidation = validateProjectSetup(project.team, project.season || currentSeasonSource(project), { requireSeason });
+    return persistProject(project);
+  }
+
+  function rebuildSelectedDesignArtifacts(project) {
+    project.bom = buildBom(project.team, project.selectedDesign);
+    project.physics = calculateMechanisms({ design: project.selectedDesign });
+    project.cad = generateCadConcept(project);
+    project.code = generateCode(project);
+    project.codeValidation = validateGeneratedJava(project.code);
+    project.autonomousPlan = buildAutonomousPlan(project);
+    project.buildGuide = buildGuide(project);
+    return persistProject(project, { refreshReview: true });
+  }
+
+  function attachDocumentToProject(project, doc) {
+    project.documents = Array.from(new Set([...(project.documents || []), doc.id]));
+    project.season = currentSeasonSource(project);
+    if (doc.seasonSource) project.team.manual = doc.seasonSource.title || doc.title;
+    return persistProject(project, { refreshReview: true });
+  }
+
   app.get('/api/health', (_req, res) => {
     res.json({
       ok: true,
@@ -268,14 +311,14 @@ export function registerRoutes(app, {
   });
 
   app.get('/api/projects/:id', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.json(projectForResponse(project));
   });
 
   app.delete('/api/projects/:id', async (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     if (project.transient) return res.status(400).json({ error: 'Cannot delete the transient demo project.' });
     state.projects.delete(req.params.id);
     await persistProjects();
@@ -283,23 +326,17 @@ export function registerRoutes(app, {
   });
 
   app.patch('/api/projects/:id', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
-    project.team = defaultTeam({ ...project.team, ...(req.body.team || req.body || {}) });
-    project.setupValidation = validateProjectSetup(project.team, project.season || currentSeasonSource(project), { requireSeason: false });
-    project.updatedAt = nowIso();
-    persistProjects();
+    const project = projectFromRequest(req, res);
+    if (!project) return;
+    updateProjectTeam(project, req.body.team || req.body || {});
     res.json(projectForResponse(project));
   });
 
   app.post('/api/projects/:id/intake', async (req, res, next) => {
     try {
-      const project = state.projects.get(req.params.id);
-      if (!project) return res.status(404).json({ error: 'Project not found' });
-      project.team = defaultTeam({ ...project.team, ...(req.body.team || req.body || {}) });
-      project.setupValidation = validateProjectSetup(project.team, project.season || currentSeasonSource(project), { requireSeason: false });
-      project.updatedAt = nowIso();
-      persistProjects();
+      const project = projectFromRequest(req, res);
+      if (!project) return;
+      updateProjectTeam(project, req.body.team || req.body || {});
       res.json(projectForResponse(project));
     } catch (error) {
       next(error);
@@ -308,8 +345,8 @@ export function registerRoutes(app, {
 
   app.post('/api/projects/:id/generate-blueprint', async (req, res, next) => {
     try {
-      const project = state.projects.get(req.params.id);
-      if (!project) return res.status(404).json({ error: 'Project not found' });
+      const project = projectFromRequest(req, res);
+      if (!project) return;
       const status = aiStatus();
       if (!status.ready) {
         return res.status(503).json({
@@ -345,7 +382,7 @@ export function registerRoutes(app, {
       project.selectedDesign = project.concepts[1] || project.concepts[0];
       rebuildDerivedArtifacts(project, { preserveAi: project.generatedBy?.startsWith('vertex') });
       project.updatedAt = nowIso();
-      persistProjects();
+      persistProject(project);
       res.json(projectForResponse(project));
     } catch (error) {
       next(error);
@@ -358,8 +395,7 @@ export function registerRoutes(app, {
       const project = state.projects.get(req.params.id);
       if (project) {
         project.documents = docs.map((doc) => doc.id);
-        project.updatedAt = nowIso();
-        persistProjects();
+        persistProject(project);
       }
       res.json({ documents: docs, chunks: state.chunks.length });
     } catch (error) {
@@ -384,13 +420,7 @@ export function registerRoutes(app, {
       });
       const project = state.projects.get(req.params.id);
       if (project) {
-        project.documents = Array.from(new Set([...(project.documents || []), doc.id]));
-        project.season = currentSeasonSource(project);
-        project.team.manual = doc.seasonSource?.title || doc.title;
-        project.review = reviewProject(project);
-        project.legalChecklist = project.review.legalChecklist;
-        project.updatedAt = nowIso();
-        persistProjects();
+        attachDocumentToProject(project, doc);
       }
       res.status(201).json({ document: doc, project: project ? projectForResponse(project) : null });
     } catch (error) {
@@ -400,8 +430,8 @@ export function registerRoutes(app, {
 
   app.post('/api/projects/:id/documents/ingest-url', async (req, res, next) => {
     try {
-      const project = state.projects.get(req.params.id);
-      if (!project) return res.status(404).json({ error: 'Project not found' });
+      const project = projectFromRequest(req, res);
+      if (!project) return;
       const url = String(req.body?.url || '').trim();
       if (!url) return res.status(400).json({ error: 'Document URL is required.' });
       const doc = await ingestDocumentFromUrl({
@@ -411,13 +441,7 @@ export function registerRoutes(app, {
         version: req.body?.version || null,
         sourceDate: req.body?.sourceDate || null,
       });
-      project.documents = Array.from(new Set([...(project.documents || []), doc.id]));
-      project.season = currentSeasonSource(project);
-      if (doc.seasonSource) project.team.manual = doc.seasonSource.title || doc.title;
-      project.review = reviewProject(project);
-      project.legalChecklist = project.review.legalChecklist;
-      project.updatedAt = nowIso();
-      persistProjects();
+      attachDocumentToProject(project, doc);
       res.status(201).json({ document: doc, project: projectForResponse(project) });
     } catch (error) {
       next(error);
@@ -452,55 +476,40 @@ export function registerRoutes(app, {
   });
 
   app.post('/api/projects/:id/generate-strategies', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.strategy = buildStrategy({ ...project.team, ...(req.body || {}) });
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project);
     res.json(project.strategy);
   });
 
   app.post('/api/projects/:id/generate-designs', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.concepts = buildConcepts({ ...project.team, ...(req.body || {}) });
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project);
     res.json(project.concepts);
   });
 
   app.post('/api/projects/:id/select-design', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.selectedDesign = project.concepts.find((concept) => concept.id === req.body.designId) || project.concepts[1];
-    project.bom = buildBom(project.team, project.selectedDesign);
-    project.physics = calculateMechanisms({ design: project.selectedDesign });
-    project.cad = generateCadConcept(project);
-    project.code = generateCode(project);
-    project.codeValidation = validateGeneratedJava(project.code);
-    project.autonomousPlan = buildAutonomousPlan(project);
-    project.buildGuide = buildGuide(project);
-    project.legalChecklist = reviewProject(project).legalChecklist;
-    project.review = reviewProject(project);
-    project.updatedAt = nowIso();
-    persistProjects();
+    rebuildSelectedDesignArtifacts(project);
     res.json(projectForResponse(project));
   });
 
   app.post('/api/projects/:id/generate-bom', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.bom = buildBom({ ...project.team, ...(req.body.team || {}) }, req.body.designId ? req.body.designId : project.selectedDesign);
-    project.review = reviewProject(project);
-    project.legalChecklist = project.review.legalChecklist;
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: true });
     res.json(project.bom);
   });
 
   app.patch('/api/projects/:id/bom/overrides', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     const key = String(req.body?.key || '').trim();
     if (!key) return res.status(400).json({ error: 'BOM override key is required.' });
     const override = req.body?.override || {};
@@ -512,132 +521,116 @@ export function registerRoutes(app, {
       },
     });
     project.bom = buildBom(project.team, project.selectedDesign);
-    project.review = reviewProject(project);
-    project.legalChecklist = project.review.legalChecklist;
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: true });
     res.json(projectForResponse(project));
   });
 
   app.post('/api/projects/:id/calculate/mechanism', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.physics = calculateMechanisms(req.body);
-    project.review = reviewProject(project);
-    project.legalChecklist = project.review.legalChecklist;
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: true });
     res.json(project.physics);
   });
 
   app.get('/api/projects/:id/calculations', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.json(project.physics);
   });
 
   app.post('/api/projects/:id/generate-cad', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.cad = generateCadConcept({ ...project, cadInputs: req.body });
-    project.review = reviewProject(project);
-    project.legalChecklist = project.review.legalChecklist;
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: true });
     res.json(project.cad);
   });
 
   app.get('/api/projects/:id/cad', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.json(project.cad);
   });
 
   app.get('/api/projects/:id/cad/export', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.type('text/plain').send(JSON.stringify(project.cad, null, 2));
   });
 
   app.get('/api/projects/:id/cad/export.concept.json', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.attachment(cadExportName(project, 'concept.json'));
     res.type('application/json').send(JSON.stringify(cadAsConceptJson(project), null, 2));
   });
 
   app.get('/api/projects/:id/cad/export.concept.step', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.attachment(cadExportName(project, 'concept.step'));
     res.type('text/plain').send(cadAsStep(project));
   });
 
   app.get('/api/projects/:id/cad/export.glb', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.set('X-Blueprint-Artifact-Notice', 'Concept JSON artifact; real GLB mesh export is not implemented in the MVP.');
     res.attachment(cadExportName(project, 'concept.json'));
     res.type('application/json').send(JSON.stringify(cadAsConceptJson(project), null, 2));
   });
 
   app.get('/api/projects/:id/cad/export.step', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.set('X-Blueprint-Artifact-Notice', 'Concept STEP-like note; manufacturing-ready STEP export is not implemented in the MVP.');
     res.attachment(cadExportName(project, 'concept.step'));
     res.type('text/plain').send(cadAsStep(project));
   });
 
   app.post('/api/projects/:id/generate-code', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.code = generateCode({ ...project, codeInputs: req.body });
     project.codeValidation = validateGeneratedJava(project.code);
     project.autonomousPlan = buildAutonomousPlan(project, req.body?.autonomous || {});
-    project.review = reviewProject(project);
-    project.legalChecklist = project.review.legalChecklist;
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: true });
     res.json(project.code);
   });
 
   app.post('/api/projects/:id/autonomous-plan', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.autonomousPlan = buildAutonomousPlan(project, req.body || {});
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project);
     res.json(project.autonomousPlan);
   });
 
   app.get('/api/projects/:id/autonomous-plan', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.autonomousPlan = project.autonomousPlan || buildAutonomousPlan(project);
     res.json(project.autonomousPlan);
   });
 
   app.get('/api/projects/:id/code', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.json(project.code);
   });
 
   app.get('/api/projects/:id/code/validate', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.codeValidation = validateGeneratedJava(project.code || {});
-    project.review = reviewProject(project);
-    project.legalChecklist = project.review.legalChecklist;
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: true });
     res.json(project.codeValidation);
   });
 
   app.get('/api/projects/:id/code/export.zip', (req, res, next) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.attachment(`${project.team.name.replace(/[^a-z0-9]+/gi, '-')}-FTC-code.zip`);
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.on('error', next);
@@ -649,43 +642,42 @@ export function registerRoutes(app, {
   });
 
   app.post('/api/projects/:id/generate-build-guide', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.buildGuide = buildGuide({ ...project, buildInputs: req.body });
-    project.review = reviewProject(project);
-    project.legalChecklist = project.review.legalChecklist;
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: true });
     res.json(project.buildGuide);
   });
 
   app.get('/api/projects/:id/build-guide', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.json(project.buildGuide);
   });
 
   app.get('/api/projects/:id/build-guide/export.html', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.attachment(`${project.team.name.replace(/[^a-z0-9]+/gi, '-')}-build-guide.html`);
     res.type('html').send(buildGuideHtml(project));
   });
 
   app.get('/api/projects/:id/export.json', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     res.attachment(`${project.team.name.replace(/[^a-z0-9]+/gi, '-')}-blueprint.json`);
     res.json(projectForResponse(project));
   });
 
   app.get('/api/projects/:id/prompts', (req, res) => {
-    const project = state.projects.get(req.params.id) || demoProject;
+    const project = projectFromRequest(req, res, { fallbackToDemo: true });
+    if (!project) return;
     res.json(buildAgentPrompts(project));
   });
 
   app.post('/api/projects/:id/agents/review-plan', (req, res) => {
-    const project = state.projects.get(req.params.id) || demoProject;
+    const project = projectFromRequest(req, res, { fallbackToDemo: true });
+    if (!project) return;
     const prompts = buildAgentPrompts(project);
     res.json({
       projectContext: prompts.context,
@@ -707,11 +699,10 @@ export function registerRoutes(app, {
   });
 
   app.post('/api/projects/:id/driver-logs/analyze', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     project.driverInsight = analyzeDriverLogs(req.body.logs || req.body.events || req.body.csv || []);
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project);
     res.json(project.driverInsight);
   });
 
@@ -732,7 +723,8 @@ export function registerRoutes(app, {
   });
 
   app.post('/api/projects/:id/chat', async (req, res) => {
-    const project = state.projects.get(req.params.id) || demoProject;
+    const project = projectFromRequest(req, res, { fallbackToDemo: true });
+    if (!project) return;
     const message = String(req.body?.message || '');
     const goalMatch = message.trim().match(/^\/goal(?:\s+([\s\S]+))?$/i);
     if (goalMatch) {
@@ -747,9 +739,8 @@ export function registerRoutes(app, {
       }
 
       project.team.goals = goal;
-      project.updatedAt = nowIso();
       project.strategy = buildStrategy(project.team, project.season || currentSeasonSource(project));
-      if (!project.transient) persistProjects();
+      persistProject(project);
 
       return res.json({
         answer: `Goal updated: ${goal}`,
@@ -763,9 +754,13 @@ export function registerRoutes(app, {
     const citations = quoteRule(message);
     const catalogHits = searchCatalog(message, 3);
     const ai = await callVertexJson({
+      systemPrompt: [
+        'You are Blueprint, an FTC engineering workspace assistant.',
+        'Answer using project context, indexed citations, and catalog hints.',
+        'Do not make legality claims without citations.',
+      ].join('\n'),
       prompt: [
         'Return JSON: { "answer": string, "suggestedActions": string[] }.',
-        'You are Blueprint. Answer using the project context. Do not make legality claims without citations.',
         `Question: ${message}`,
         `Team: ${JSON.stringify(project.team)}`,
         `Season: ${JSON.stringify(project.season || currentSeasonSource(project))}`,
@@ -789,8 +784,8 @@ export function registerRoutes(app, {
   });
 
   app.post('/api/projects/:id/chat/apply', (req, res) => {
-    const project = state.projects.get(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const project = projectFromRequest(req, res);
+    if (!project) return;
     const suggestion = req.body?.suggestion || {};
     const action = suggestion.action;
     if (action === 'set-goal') {
@@ -802,15 +797,12 @@ export function registerRoutes(app, {
       project.strategy = buildStrategy(project.team, project.season || currentSeasonSource(project));
     } else if (action === 'regenerate-bom') {
       project.bom = buildBom(project.team, project.selectedDesign);
-      project.review = reviewProject(project);
-      project.legalChecklist = project.review.legalChecklist;
     } else if (action === 'regenerate-autonomous') {
       project.autonomousPlan = buildAutonomousPlan(project);
     } else {
       return res.status(400).json({ error: 'Unsupported chat suggestion action.' });
     }
-    project.updatedAt = nowIso();
-    persistProjects();
+    persistProject(project, { refreshReview: action === 'regenerate-bom' });
     res.json({ applied: true, message: `${suggestion.label || 'Suggestion'} applied`, project: projectForResponse(project) });
   });
 
