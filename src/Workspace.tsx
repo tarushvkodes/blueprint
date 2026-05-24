@@ -17,9 +17,10 @@ import {
   Upload,
   Users,
 } from 'lucide-react'
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { artifactUrl } from './api'
 import { codeSample, defaultBlueprintQuestion } from './projectData'
+import { validateTeamSetupDraft } from './setupValidation'
 import { workspaceTabs, type AiStatus, type BuildGuideStep, type ProjectData, type Team, type WorkspaceTab } from './types'
 import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
 
@@ -40,8 +41,8 @@ type WorkspaceProps = {
   selectDesign: (index: number) => void
   uploadManual: (file: File) => void
   syncCatalog: () => void
-  askBlueprint: () => void
   analyzeDriverLogs: (file: File) => void
+  askBlueprint: (message?: string) => void
   downloadCode: () => void
 }
 
@@ -92,6 +93,7 @@ export function Workspace({
   downloadCode,
 }: WorkspaceProps) {
   const selected = project.concepts[selectedConcept] ?? project.concepts[0]
+  const isVertexGenerated = project.generatedBy?.startsWith('vertex')
   const buildGuideRows: BuildGuideStep[] = project.buildGuide?.length
     ? project.buildGuide
     : project.buildSteps.map((step) => ({ phase: 'Build', instructions: step }))
@@ -101,6 +103,7 @@ export function Workspace({
   }))
   const [wizardStep, setWizardStep] = useState(0)
   const [inventoryUploadStatus, setInventoryUploadStatus] = useState('')
+  const [chatDraft, setChatDraft] = useState(defaultBlueprintQuestion)
   const teamDraft = teamDraftState.projectId === project.id ? teamDraftState.team : project.team
   const setTeamDraft = (updater: Team | ((current: Team) => Team)) => {
     setTeamDraftState((current) => {
@@ -111,16 +114,10 @@ export function Workspace({
     })
   }
 
-  const setupChecks = useMemo(() => [
-    { label: 'Team identity', done: Boolean(teamDraft.name && teamDraft.number && teamDraft.location) },
-    { label: 'Budget and timeline', done: Number(teamDraft.budget) > 0 && Number(teamDraft.timelineWeeks) > 0 },
-    { label: 'Inventory captured', done: Boolean(teamDraft.inventory?.length) },
-    { label: 'Strategy mode', done: Boolean(teamDraft.strategyMode) },
-    { label: 'Robot priorities', done: Boolean(teamDraft.priorities?.length) },
-    { label: 'Season source', done: !project.season?.isSample },
-  ], [project.season?.isSample, teamDraft])
-
-  const setupComplete = setupChecks.filter((item) => item.done).length
+  const setupValidation = useMemo(() => validateTeamSetupDraft(teamDraft, project.season), [project.season, teamDraft])
+  const setupChecks = setupValidation.checks
+  const setupReady = setupValidation.ready
+  const setupComplete = setupValidation.completed
   const currentWizardStep = wizardSteps[wizardStep]
 
   const updateTeamField = (field: keyof Team, value: string | number) => {
@@ -179,6 +176,19 @@ export function Workspace({
     window.open(artifactUrl(path), '_blank')
   }
 
+  const submitChat = () => {
+    const message = chatDraft.trim()
+    if (!message) return
+    askBlueprint(message)
+  }
+
+  const handleChatKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      submitChat()
+    }
+  }
+
   return (
     <main className="app-shell workspace-screen">
       <ShaderBackdrop variant="workspace" />
@@ -225,9 +235,9 @@ export function Workspace({
             <Download size={18} />
             Download code ZIP
           </button>
-          <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadGltf)}>
+          <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadConceptJson || project.artifactUrls?.cadGltf)}>
             <Download size={18} />
-            Download CAD GLB
+            Download CAD concept
           </button>
           <button type="button" onClick={() => setActiveTab('Chat')}>
             <MessageSquareText size={18} />
@@ -273,7 +283,7 @@ export function Workspace({
                   <h2>Blueprint setup</h2>
                   <p>Upload the official season manual, enter team requirements, then generate code, CAD, and build instructions.</p>
                 </div>
-                <strong>{project.generatedBy === 'vertex-express' ? 'Vertex AI' : 'Fallback'}</strong>
+                <strong>{isVertexGenerated ? 'Vertex AI' : 'Fallback'}</strong>
               </div>
 
               <div className="setup-grid wizard-grid">
@@ -457,7 +467,7 @@ export function Workspace({
                       <Save size={16} />
                       Save draft
                     </button>
-                    <button type="button" onClick={() => createProject(teamDraft)}>
+                    <button type="button" disabled={!setupReady} onClick={() => createProject(teamDraft)}>
                       <PlusCircle size={16} />
                       Create project
                     </button>
@@ -467,11 +477,17 @@ export function Workspace({
                         <ChevronRight size={16} />
                       </button>
                     ) : (
-                      <button type="button" onClick={() => generateFullBlueprint(teamDraft)}>
+                      <button type="button" disabled={!setupReady} onClick={() => generateFullBlueprint(teamDraft)}>
                         Generate blueprint
                       </button>
                     )}
                   </div>
+                  {!setupReady && (
+                    <div className="setup-alert">
+                      <strong>Finish setup before generation</strong>
+                      <span>{setupValidation.blockers[0]}</span>
+                    </div>
+                  )}
                 </section>
 
                 <aside className="setup-card setup-companion">
@@ -501,19 +517,25 @@ export function Workspace({
 
                   <div className="setup-meter">
                     <span>{setupComplete}/{setupChecks.length} setup checks</span>
-                    <div><i style={{ width: `${(setupComplete / setupChecks.length) * 100}%` }} /></div>
+                    <div><i style={{ width: `${setupValidation.percent}%` }} /></div>
                   </div>
                   <ul className="setup-checklist">
                     {setupChecks.map((item) => (
-                      <li className={item.done ? 'is-done' : ''} key={item.label}>
+                      <li className={item.done ? 'is-done' : item.required ? 'is-required' : ''} key={item.label} title={item.done ? item.label : item.message}>
                         <CheckCircle2 size={15} />
                         {item.label}
                       </li>
                     ))}
                   </ul>
+                  {!!setupValidation.warnings.length && (
+                    <small className="setup-warning">{setupValidation.warnings[0]}</small>
+                  )}
 
                   <div className="artifact-buttons compact-artifacts">
                     <button type="button" onClick={downloadCode}><Download size={16} /> Code ZIP</button>
+                    <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadConceptJson || project.artifactUrls?.cadGltf)}><Download size={16} /> CAD concept JSON</button>
+                    <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadConceptStep || project.artifactUrls?.cadStep)}><Download size={16} /> CAD concept STEP</button>
+                    <button type="button" onClick={() => openArtifact(project.artifactUrls?.buildGuideHtml)}><Download size={16} /> Build guide</button>
                     <button type="button" onClick={() => openArtifact(project.artifactUrls?.projectJson)}><Download size={16} /> Project JSON</button>
                   </div>
                 </aside>
@@ -576,6 +598,18 @@ export function Workspace({
                   </button>
                 ))}
               </div>
+              {!!selected?.mechanismSpecs?.length && (
+                <div className="mechanism-spec-grid">
+                  {selected.mechanismSpecs.map((spec) => (
+                    <article key={spec.id}>
+                      <span>{spec.type}</span>
+                      <strong>{spec.name}</strong>
+                      <p>{spec.summary}</p>
+                      <small>{spec.id}</small>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -622,6 +656,10 @@ export function Workspace({
                 <h2>FTC SDK Java</h2>
                 <button type="button" onClick={downloadCode}><Download size={16} /> ZIP</button>
               </div>
+              <div className={`validation-banner ${project.codeValidation?.ok ? 'is-ok' : 'has-issues'}`}>
+                <strong>{project.codeValidation?.ok ? 'Static validation passed' : 'Static validation needs review'}</strong>
+                <span>{project.codeValidation?.note || 'Compile inside a real FTC SDK project before robot use.'}</span>
+              </div>
               <pre><code>{codeSample}</code></pre>
               <div className="file-row">
                 {project.codeFiles.map((file) => <span key={file}>{file}</span>)}
@@ -635,10 +673,11 @@ export function Workspace({
                 <h2>CAD exports</h2>
                 <strong>{project.season?.seasonName || 'Season'}</strong>
               </div>
-              <p>Blueprint generates a parametric CAD layout first, then exposes downloadable GLB-style and STEP-style artifacts for review.</p>
+              <p>Blueprint generates a parametric CAD layout first, then exposes downloadable concept artifacts for review.</p>
+              <p>These are concept specs for review, not manufacturing-ready mesh or STEP exports.</p>
               <div className="artifact-buttons">
-                <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadGltf)}><Download size={16} /> Download GLB</button>
-                <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadStep)}><Download size={16} /> Download STEP</button>
+                <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadConceptJson || project.artifactUrls?.cadGltf)}><Download size={16} /> Concept JSON</button>
+                <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadConceptStep || project.artifactUrls?.cadStep)}><Download size={16} /> Concept STEP note</button>
               </div>
               <pre><code>{JSON.stringify(project.season?.robotConstraints || [], null, 2)}</code></pre>
             </div>
@@ -669,8 +708,13 @@ export function Workspace({
               <h2>Ask Blueprint</h2>
               <p>Use this as the iteration layer for strategy, legality, torque, code, grants, and driver controls.</p>
               <div className="workspace-chat-row">
-                <span>{defaultBlueprintQuestion}</span>
-                <button type="button" onClick={askBlueprint}><Send size={16} /> Ask</button>
+                <textarea
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                  onKeyDown={handleChatKeyDown}
+                  placeholder="/goal Build a reliable low-cost autonomous robot"
+                />
+                <button type="button" onClick={submitChat}><Send size={16} /> Send</button>
               </div>
               {chatAnswer && <p className="workspace-answer">{chatAnswer}</p>}
             </div>

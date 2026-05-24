@@ -33,7 +33,49 @@ export type Concept = {
   buildTime: string
   fit: string
   mechanisms: string[]
+  mechanismSpecs?: MechanismSpec[]
   risks: string[]
+}
+
+export type MechanismHardware = {
+  kind: string
+  name: string
+  quantity: number
+  skuHint?: string | null
+  query?: string | null
+  required?: boolean
+  buyFirst?: number
+}
+
+export type MechanismSpec = {
+  id: string
+  type: 'drivetrain' | 'intake' | 'manipulator' | 'sensor' | 'control' | string
+  subsystem?: string
+  name: string
+  role: string
+  summary: string
+  architecture: string
+  priority: 'required' | 'recommended' | 'optional' | string
+  sortOrder?: number
+  hardware: MechanismHardware[]
+  physicsInputs?: Record<string, string | number | boolean | null>
+  cad?: {
+    placement?: string
+    envelopeMm?: Record<string, number>
+    notes?: string[]
+  }
+  code?: {
+    subsystem?: string
+    driveMode?: string
+    hardwareNames?: string[]
+    presets?: Record<string, number>
+  }
+  risks?: string[]
+  validation?: {
+    requiresPhysics?: boolean
+    requiresCode?: boolean
+    requiresCad?: boolean
+  }
 }
 
 export type Rule = {
@@ -45,6 +87,9 @@ export type Rule = {
 }
 
 export type BomItem = {
+  mechanismId?: string
+  mechanismIds?: string[]
+  mechanismName?: string
   subsystem: string
   sku: string
   part: string
@@ -54,6 +99,7 @@ export type BomItem = {
 }
 
 export type PhysicsItem = {
+  mechanismId?: string
   mechanism: string
   formula: string
   inputs: string
@@ -66,6 +112,7 @@ export type ProjectData = {
   id?: string
   demo?: boolean
   team: Team
+  setupValidation?: TeamSetupValidation
   season?: SeasonSource
   generatedBy?: string
   aiFallbackReason?: string | null
@@ -79,8 +126,27 @@ export type ProjectData = {
   buildSteps: string[]
   buildGuide?: BuildGuideStep[]
   codeFiles: string[]
+  codeValidation?: CodeValidation
   driverInsight: string
   sponsorDraft: string
+}
+
+export type TeamSetupCheck = {
+  id: string
+  label: string
+  done: boolean
+  required: boolean
+  message: string
+}
+
+export type TeamSetupValidation = {
+  ready: boolean
+  completed: number
+  total: number
+  percent: number
+  checks: TeamSetupCheck[]
+  blockers: string[]
+  warnings: string[]
 }
 
 export type AiStatus = {
@@ -88,6 +154,8 @@ export type AiStatus = {
   provider: string
   textModel: string
   imageModel: string
+  projectId?: string | null
+  location?: string | null
   message: string
   lastError?: string | null
 }
@@ -118,12 +186,26 @@ export type SourceDocument = {
 export type ArtifactUrls = {
   projectJson?: string
   codeZip?: string
+  cadConceptJson?: string
+  cadConceptStep?: string
   cadGltf?: string
   cadStep?: string
   buildGuideHtml?: string
 }
 
+export type CodeValidation = {
+  ok: boolean
+  checkedAt?: string
+  checkedFiles?: string[]
+  requiredFiles?: string[]
+  hardwareNames?: string[]
+  issues: string[]
+  warnings: string[]
+  note?: string
+}
+
 export type BuildGuideStep = {
+  mechanismId?: string | null
   phase: string
   title?: string
   parts?: string[]
@@ -164,6 +246,7 @@ export type ApiProjectResponse = {
   id?: string
   demo?: boolean
   team?: Partial<Team>
+  setupValidation?: TeamSetupValidation
   concepts?: ApiConcept[]
   rules?: Rule[]
   bom?: BomItem[] | {
@@ -175,6 +258,7 @@ export type ApiProjectResponse = {
   buildSteps?: string[]
   code?: Record<string, string>
   codeFiles?: string[]
+  codeValidation?: CodeValidation
   season?: SeasonSource
   generatedBy?: string
   aiFallbackReason?: string | null

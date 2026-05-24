@@ -1,4 +1,4 @@
-import { defaultBlueprintQuestion } from './projectData'
+import { defaultBlueprintQuestion, fallbackProject } from './projectData'
 import type {
   ApiBomItem,
   ApiConcept,
@@ -10,44 +10,74 @@ import type {
   ProjectData,
   Team,
   AiStatus,
+  TeamSetupValidation,
 } from './types'
 
-const API_BASE = 'http://localhost:8787/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8787/api'
+
+export class BlueprintApiError extends Error {
+  status: number
+  payload: unknown
+  setupValidation?: TeamSetupValidation
+
+  constructor(status: number, payload: unknown) {
+    const message = typeof payload === 'object' && payload && 'error' in payload
+      ? String((payload as { error?: unknown }).error)
+      : `Blueprint API request failed: ${status}`
+    super(message)
+    this.name = 'BlueprintApiError'
+    this.status = status
+    this.payload = payload
+    this.setupValidation = typeof payload === 'object' && payload && 'setupValidation' in payload
+      ? (payload as { setupValidation?: TeamSetupValidation }).setupValidation
+      : undefined
+  }
+}
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init)
+  const text = await response.text()
+  const payload = text ? JSON.parse(text) : null
 
   if (!response.ok) {
-    throw new Error(`Blueprint API request failed: ${response.status}`)
+    throw new BlueprintApiError(response.status, payload)
   }
 
-  return response.json() as Promise<T>
+  return payload as T
 }
 
 function normalizeConcept(concept: ApiConcept | Concept): Concept {
   const estimatedCost = 'estimatedCost' in concept ? concept.estimatedCost : undefined
   const strategyFit = 'strategyFit' in concept ? concept.strategyFit : undefined
   const mainMechanisms = 'mainMechanisms' in concept ? concept.mainMechanisms : undefined
+  const rawCost = estimatedCost ?? concept.cost
+  const cost = Number(rawCost)
 
   return {
     id: concept.id,
     name: concept.name,
     difficulty: concept.difficulty,
-    cost: estimatedCost ?? concept.cost ?? 0,
+    cost: Number.isFinite(cost) ? cost : 0,
     buildTime: concept.buildTime ?? 'Timeline pending',
     fit: strategyFit ?? concept.fit ?? '',
     mechanisms: mainMechanisms ?? concept.mechanisms ?? [],
+    mechanismSpecs: concept.mechanismSpecs ?? [],
     risks: concept.risks ?? [],
   }
 }
 
 function normalizeBomItem(item: ApiBomItem | BomItem): BomItem {
+  const qty = Number(item.qty)
+  const price = Number(item.price)
   return {
+    mechanismId: item.mechanismId,
+    mechanismIds: item.mechanismIds,
+    mechanismName: item.mechanismName,
     subsystem: item.subsystem,
     sku: item.sku,
     part: item.part,
-    qty: item.qty,
-    price: item.price,
+    qty: Number.isFinite(qty) ? qty : 0,
+    price: Number.isFinite(price) ? price : 0,
     stock: item.stock,
   }
 }
@@ -65,6 +95,7 @@ function normalizePhysicsItem(item: ApiPhysicsItem | PhysicsItem): PhysicsItem {
   const safetyFactor = 'safetyFactor' in item ? item.safetyFactor : undefined
 
   return {
+    mechanismId: item.mechanismId,
     mechanism: item.mechanism,
     formula: item.formula,
     inputs: physicsInputs(item),
@@ -102,6 +133,7 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
       ...previousProject.team,
       ...(data.team ?? {}),
     },
+    setupValidation: data.setupValidation ?? previousProject.setupValidation,
     season: data.season ?? previousProject.season,
     generatedBy: data.generatedBy ?? previousProject.generatedBy,
     aiFallbackReason: data.aiFallbackReason ?? previousProject.aiFallbackReason,
@@ -117,13 +149,15 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
       : data.buildSteps ?? previousProject.buildSteps,
     buildGuide: data.buildGuide ?? previousProject.buildGuide,
     codeFiles: data.code ? Object.keys(data.code) : data.codeFiles ?? previousProject.codeFiles,
+    codeValidation: data.codeValidation ?? previousProject.codeValidation,
     driverInsight: normalizeDriverInsight(data.driverInsight, previousProject.driverInsight),
     sponsorDraft: normalizeSponsorDraft(data.sponsorDraft, previousProject.sponsorDraft),
   }
 }
 
 export function fetchDemoProject() {
-  return requestJson<ProjectData>('/project/demo')
+  return requestJson<ApiProjectResponse>('/project/demo')
+    .then((data) => normalizeProjectResponse(data, fallbackProject))
 }
 
 export async function fetchProject(projectId: string, previousProject: ProjectData) {
@@ -201,14 +235,17 @@ export async function syncRevCatalog() {
   return data.synced ?? 0
 }
 
-export async function askBlueprintQuestion(projectId: string, message = defaultBlueprintQuestion) {
-  const data = await requestJson<{ answer?: string }>(`/projects/${projectId}/chat`, {
+export async function askBlueprintQuestion(projectId: string, previousProject: ProjectData, message = defaultBlueprintQuestion) {
+  const data = await requestJson<{ answer?: string; project?: ApiProjectResponse }>(`/projects/${projectId}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ message }),
   })
 
-  return data.answer ?? 'Blueprint returned no answer.'
+  return {
+    answer: data.answer ?? 'Blueprint returned no answer.',
+    project: data.project ? normalizeProjectResponse(data.project, previousProject) : null,
+  }
 }
 
 export async function analyzeDriverLogText(projectId: string, text: string) {

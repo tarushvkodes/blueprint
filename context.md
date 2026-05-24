@@ -719,6 +719,8 @@ Legend:
 - [x] Workspace tabs
 - [x] API health endpoint
 - [x] Local PDF ingestion for writeup/manual
+- [x] Local JSON project snapshot persistence
+- [x] Project list/delete API
 - [~] Document chunking
 - [~] Local JSON project persistence; persistent database still not added
 - [ ] Authentication
@@ -827,6 +829,8 @@ Legend:
 - [x] `README.md`
 - [x] Code ZIP export
 - [~] Hardware configuration checklist
+- [~] Static generated-code validation endpoint
+- [~] CI compile smoke test against FTC compatibility stubs
 - [ ] Compile generated code inside sample FTC project
 - [ ] Intake subsystem class
 - [ ] Battery voltage warning
@@ -862,8 +866,10 @@ Legend:
 - [x] Runtime health smoke tests
 - [x] REV catalog sync/search smoke test
 - [x] Workspace interaction test with Playwright
+- [x] API integration test suite
+- [~] Generated Java static validation
+- [~] Generated Java fixture compile in CI
 - [ ] Unit tests
-- [ ] API integration test suite
 - [ ] Generated Java compile test
 - [ ] Accessibility pass
 
@@ -1025,7 +1031,16 @@ Mitigation:
 
 - `src/App.tsx`: Blueprint frontend and workspace UI.
 - `src/App.css`: Visual design and workspace layout.
-- `server/index.js`: API server, document ingestion, REV adapter, generators, prompt architecture.
+- `server/index.js`: Runtime bootstrap, cache restore, route registration, and server start.
+- `server/routes.js`: Express route registration for projects, artifacts, catalog, chat, and exports.
+- `server/documents.js`: PDF ingestion, document chunking, season/manual extraction, and rule lookup.
+- `server/catalog.js`: REV adapter, catalog cache, product parsing, and search.
+- `server/generators/project.js`: Team defaults, concepts, strategy, BOM, physics, build guide, prompts, and response normalization.
+- `server/generators/code.js`: FTC SDK Java starter generation.
+- `server/generators/cad.js`: Concept CAD layout and export helpers.
+- `server/config.js`: Runtime paths, env loading, and server config.
+- `server/persistence.js`: Local `.cache/projects.json` project snapshots.
+- `server/javaValidation.js`: Static validation for generated FTC Java output.
 - `.cache/rev-catalog.json`: Local REV catalog cache, ignored by git.
 - `context.md`: This living project context.
 

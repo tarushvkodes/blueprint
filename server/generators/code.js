@@ -1,0 +1,45 @@
+import { getMechanismSpecs, mechanismIds } from './mechanisms.js';
+
+export function generateCode(project) {
+  const specs = getMechanismSpecs(project.selectedDesign || project.concepts?.[1], project.team, project.season);
+  const drivetrain = specs.find((spec) => spec.type === 'drivetrain');
+  const manipulator = specs.find((spec) => spec.type === 'manipulator');
+  const intake = specs.find((spec) => spec.type === 'intake');
+  const driveMode = drivetrain?.code?.driveMode === 'arcade' ? 'arcade' : 'mecanum';
+  const intakeUsesMotor = intake?.code?.hardwareNames?.includes('intake_motor');
+  const hardwareNameList = Array.from(new Set(specs.flatMap((spec) => spec.code?.hardwareNames || [])));
+  const hardwareNames = {
+    leftFront: drivetrain?.code?.hardwareNames?.[0] || 'left_front',
+    rightFront: drivetrain?.code?.hardwareNames?.[1] || 'right_front',
+    leftBack: drivetrain?.code?.hardwareNames?.[2] || 'left_back',
+    rightBack: drivetrain?.code?.hardwareNames?.[3] || 'right_back',
+    liftMotor: manipulator?.code?.hardwareNames?.[0] || 'lift_motor',
+    intakeServo: intake?.code?.hardwareNames?.find((name) => name.includes('servo')) || 'intake_servo',
+    intakeMotor: intake?.code?.hardwareNames?.find((name) => name.includes('motor')) || 'intake_motor',
+  };
+  const lowTicks = manipulator?.code?.presets?.lowTicks || 450;
+  const highTicks = manipulator?.code?.presets?.highTicks || 1050;
+  const driveTeleOpCall = driveMode === 'arcade'
+    ? 'robot.drive.arcade(-gamepad1.left_stick_y * slow, gamepad1.right_stick_x * slow);'
+    : 'robot.drive.mecanum(-gamepad1.left_stick_y * slow, gamepad1.left_stick_x * slow, gamepad1.right_stick_x * slow);';
+  const driveAutoCall = driveMode === 'arcade'
+    ? 'robot.drive.arcade(0.35, 0);'
+    : 'robot.drive.mecanum(0.35, 0, 0);';
+  const intakeField = intakeUsesMotor ? ', intakeMotor' : '';
+  const intakeInit = intakeUsesMotor
+    ? `        intakeMotor = hardwareMap.get(DcMotor.class, "${hardwareNames.intakeMotor}");\n`
+    : '';
+  const intakeTeleOp = intakeUsesMotor
+    ? '            robot.intakeMotor.setPower(gamepad2.right_trigger - gamepad2.left_trigger);\n'
+    : '';
+
+  return {
+    'Constants.java': `package org.firstinspires.ftc.teamcode;\n\npublic final class Constants {\n    public static final double DRIVE_LIMIT = 0.70;\n    public static final double TURN_LIMIT = 0.65;\n    public static final int LIFT_LOW_TICKS = ${lowTicks};\n    public static final int LIFT_HIGH_TICKS = ${highTicks};\n    public static final double INTAKE_OPEN = 0.78;\n    public static final double INTAKE_CLOSED = 0.18;\n    private Constants() {}\n}\n`,
+    'RobotHardware.java': `package org.firstinspires.ftc.teamcode;\n\nimport com.qualcomm.robotcore.hardware.DcMotor;\nimport com.qualcomm.robotcore.hardware.HardwareMap;\nimport com.qualcomm.robotcore.hardware.Servo;\n\npublic class RobotHardware {\n    public DcMotor leftFront, rightFront, leftBack, rightBack, liftMotor${intakeField};\n    public Servo intakeServo;\n    public DriveSubsystem drive;\n    public LiftSubsystem lift;\n\n    public void init(HardwareMap hardwareMap) {\n        leftFront = hardwareMap.get(DcMotor.class, "${hardwareNames.leftFront}");\n        rightFront = hardwareMap.get(DcMotor.class, "${hardwareNames.rightFront}");\n        leftBack = hardwareMap.get(DcMotor.class, "${hardwareNames.leftBack}");\n        rightBack = hardwareMap.get(DcMotor.class, "${hardwareNames.rightBack}");\n        liftMotor = hardwareMap.get(DcMotor.class, "${hardwareNames.liftMotor}");\n${intakeInit}        intakeServo = hardwareMap.get(Servo.class, "${hardwareNames.intakeServo}");\n\n        rightFront.setDirection(DcMotor.Direction.REVERSE);\n        rightBack.setDirection(DcMotor.Direction.REVERSE);\n        liftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);\n        drive = new DriveSubsystem(leftFront, rightFront, leftBack, rightBack);\n        lift = new LiftSubsystem(liftMotor);\n    }\n}\n`,
+    'DriveSubsystem.java': `package org.firstinspires.ftc.teamcode;\n\nimport com.qualcomm.robotcore.hardware.DcMotor;\nimport com.qualcomm.robotcore.util.Range;\n\npublic class DriveSubsystem {\n    private final DcMotor leftFront, rightFront, leftBack, rightBack;\n\n    public DriveSubsystem(DcMotor leftFront, DcMotor rightFront, DcMotor leftBack, DcMotor rightBack) {\n        this.leftFront = leftFront;\n        this.rightFront = rightFront;\n        this.leftBack = leftBack;\n        this.rightBack = rightBack;\n    }\n\n    public void mecanum(double y, double x, double turn) {\n        double lf = y + x + turn;\n        double rf = y - x - turn;\n        double lb = y - x + turn;\n        double rb = y + x - turn;\n        double max = Math.max(1.0, Math.max(Math.abs(lf), Math.max(Math.abs(rf), Math.max(Math.abs(lb), Math.abs(rb)))));\n        leftFront.setPower(Range.clip(lf / max, -Constants.DRIVE_LIMIT, Constants.DRIVE_LIMIT));\n        rightFront.setPower(Range.clip(rf / max, -Constants.DRIVE_LIMIT, Constants.DRIVE_LIMIT));\n        leftBack.setPower(Range.clip(lb / max, -Constants.DRIVE_LIMIT, Constants.DRIVE_LIMIT));\n        rightBack.setPower(Range.clip(rb / max, -Constants.DRIVE_LIMIT, Constants.DRIVE_LIMIT));\n    }\n\n    public void arcade(double drive, double turn) {\n        double left = Range.clip(drive + turn, -Constants.DRIVE_LIMIT, Constants.DRIVE_LIMIT);\n        double right = Range.clip(drive - turn, -Constants.DRIVE_LIMIT, Constants.DRIVE_LIMIT);\n        leftFront.setPower(left);\n        leftBack.setPower(left);\n        rightFront.setPower(right);\n        rightBack.setPower(right);\n    }\n\n    public void stop() { mecanum(0, 0, 0); }\n}\n`,
+    'LiftSubsystem.java': `package org.firstinspires.ftc.teamcode;\n\nimport com.qualcomm.robotcore.hardware.DcMotor;\nimport com.qualcomm.robotcore.util.Range;\n\npublic class LiftSubsystem {\n    private final DcMotor liftMotor;\n\n    public LiftSubsystem(DcMotor liftMotor) {\n        this.liftMotor = liftMotor;\n        this.liftMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);\n        this.liftMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);\n    }\n\n    public void manual(double stick) {\n        liftMotor.setPower(Range.clip(-stick, -0.55, 0.75));\n    }\n\n    public void goTo(int ticks) {\n        liftMotor.setTargetPosition(ticks);\n        liftMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);\n        liftMotor.setPower(0.65);\n    }\n}\n`,
+    'TeleOpMain.java': `package org.firstinspires.ftc.teamcode;\n\nimport com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\nimport com.qualcomm.robotcore.eventloop.opmode.TeleOp;\n\n@TeleOp(name = "Blueprint TeleOp")\npublic class TeleOpMain extends LinearOpMode {\n    private final RobotHardware robot = new RobotHardware();\n\n    @Override\n    public void runOpMode() {\n        robot.init(hardwareMap);\n        telemetry.addLine("Hardware initialized. Config names are case-sensitive.");\n        telemetry.update();\n        waitForStart();\n\n        while (opModeIsActive()) {\n            double slow = gamepad1.left_bumper ? 0.42 : 1.0;\n            ${driveTeleOpCall}\n            robot.lift.manual(gamepad2.left_stick_y);\n${intakeTeleOp}            if (gamepad2.a) robot.intakeServo.setPosition(Constants.INTAKE_CLOSED);\n            if (gamepad2.b) robot.intakeServo.setPosition(Constants.INTAKE_OPEN);\n            telemetry.addData("slowMode", gamepad1.left_bumper);\n            telemetry.update();\n        }\n    }\n}\n`,
+    'AutoMain.java': `package org.firstinspires.ftc.teamcode;\n\nimport com.qualcomm.robotcore.eventloop.opmode.Autonomous;\nimport com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;\n\n@Autonomous(name = "Blueprint Auto")\npublic class AutoMain extends LinearOpMode {\n    private final RobotHardware robot = new RobotHardware();\n\n    @Override\n    public void runOpMode() throws InterruptedException {\n        robot.init(hardwareMap);\n        telemetry.addLine("Tune wheel diameter, gear ratio, track width, and battery assumptions before competition.");\n        telemetry.update();\n        waitForStart();\n\n        ${driveAutoCall}\n        sleep(750);\n        robot.drive.stop();\n        robot.lift.goTo(Constants.LIFT_LOW_TICKS);\n        sleep(900);\n        robot.intakeServo.setPosition(Constants.INTAKE_OPEN);\n        sleep(250);\n        robot.drive.stop();\n    }\n}\n`,
+    'README.md': `# Blueprint Starter Code\n\nGenerated for ${project.team.name}. Confirm FTC SDK version, package path, hardware names, motor direction, encoder constants, and legal behavior before competition.\n\nSelected mechanism IDs:\n${mechanismIds(specs).map((id) => `- ${id}`).join('\n')}\n\nMechanism architecture:\n${specs.map((spec) => `- ${spec.id}: ${spec.name} (${spec.architecture}) -> ${spec.code?.subsystem}`).join('\n')}\n\nHardware configuration names:\n${hardwareNameList.map((name) => `- ${name}`).join('\n')}\n`,
+  };
+}

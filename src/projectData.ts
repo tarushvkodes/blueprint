@@ -36,7 +36,7 @@ export const fallbackProject: ProjectData = {
     mentors: 2,
     budget: 1500,
     supplier: 'REV Robotics',
-    manual: 'DECODE Competition Manual TU32',
+    manual: 'Current FTC manual',
     tools: ['basic hand tools', '3D printer'],
     priorities: ['reliable autonomous', 'easy maintenance', 'simple driver control'],
     inventory: ['REV Starter Kit V3.1'],
@@ -50,15 +50,16 @@ export const fallbackProject: ProjectData = {
     buildSpace: 'Classroom or garage build space',
   },
   season: {
-    seasonName: 'DECODE',
-    manualVersion: 'TU32',
-    title: 'DECODE Competition Manual TU32',
+    seasonName: 'Sample season',
+    manualVersion: null,
+    title: 'Upload a current FTC manual',
     isSample: true,
-    scoringSummary: 'Sample DECODE season data is shown until a current FTC manual is uploaded.',
+    scoringSummary: 'Sample season data is shown until a current FTC manual is uploaded.',
     robotConstraints: ['Upload the current official manual to replace sample constraints.'],
   },
   generatedBy: 'local-fallback',
   aiFallbackReason: 'No live project loaded yet.',
+  setupValidation: undefined,
   sourceDocuments: [],
   artifactUrls: {},
   concepts: [
@@ -95,8 +96,13 @@ export const fallbackProject: ProjectData = {
   physics: [],
   buildSteps: [],
   codeFiles: [],
+  codeValidation: {
+    ok: false,
+    issues: ['No live generated code loaded yet.'],
+    warnings: [],
+  },
   driverInsight: 'Upload CSV or JSON gamepad logs to generate control remaps and macro suggestions.',
-  sponsorDraft: 'Subject: Supporting local FTC students building an engineering robot for DECODE',
+  sponsorDraft: 'Subject: Supporting local FTC students building an engineering robot',
 }
 
 export type PlatformModule = {

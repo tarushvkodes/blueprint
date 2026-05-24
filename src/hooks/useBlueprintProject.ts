@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   analyzeDriverLogText,
   askBlueprintQuestion,
+  BlueprintApiError,
   fetchAiStatus,
   fetchDemoProject,
   fetchProject,
@@ -67,7 +68,11 @@ export function useBlueprintProject() {
       setProject(nextProject)
       setSelectedConcept(1)
       setWorkspaceStatus('Project workspace created')
-    } catch {
+    } catch (error) {
+      if (error instanceof BlueprintApiError && error.setupValidation?.blockers?.length) {
+        setWorkspaceStatus(`Finish setup: ${error.setupValidation.blockers[0]}`)
+        return
+      }
       setWorkspaceStatus('Could not reach Blueprint API')
     }
   }, [project])
@@ -93,9 +98,13 @@ export function useBlueprintProject() {
       const nextProject = await generateBlueprint(project.id || 'demo', team || project.team, project)
       setProject(nextProject)
       setSelectedConcept(1)
-      setWorkspaceStatus(nextProject.generatedBy === 'vertex-express' ? 'Blueprint generated with Vertex AI' : 'Blueprint generated with local fallback')
+      setWorkspaceStatus(nextProject.generatedBy?.startsWith('vertex') ? 'Blueprint generated with Vertex AI' : 'Blueprint generated with local fallback')
       fetchAiStatus().then(setAiStatus).catch(() => {})
-    } catch {
+    } catch (error) {
+      if (error instanceof BlueprintApiError && error.setupValidation?.blockers?.length) {
+        setWorkspaceStatus(`Finish setup: ${error.setupValidation.blockers[0]}`)
+        return
+      }
       setWorkspaceStatus('Blueprint generation failed')
     }
   }, [project])
@@ -135,17 +144,18 @@ export function useBlueprintProject() {
     }
   }, [])
 
-  const askBlueprint = useCallback(async () => {
+  const askBlueprint = useCallback(async (message = defaultBlueprintQuestion) => {
     setWorkspaceStatus('Asking Blueprint...')
     try {
       const id = project.id || 'demo'
-      const answer = await askBlueprintQuestion(id, defaultBlueprintQuestion)
-      setChatAnswer(answer)
-      setWorkspaceStatus('Answer ready')
+      const result = await askBlueprintQuestion(id, project, message)
+      if (result.project) setProject(result.project)
+      setChatAnswer(result.answer)
+      setWorkspaceStatus(message.trim().toLowerCase().startsWith('/goal') ? 'Goal updated' : 'Answer ready')
     } catch {
       setWorkspaceStatus('Chat request failed')
     }
-  }, [project.id])
+  }, [project])
 
   const analyzeDriverLogs = useCallback(async (file: File) => {
     setWorkspaceStatus('Analyzing driver logs...')
