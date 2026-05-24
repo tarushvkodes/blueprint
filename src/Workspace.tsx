@@ -23,8 +23,18 @@ import { useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { artifactUrl } from './api'
 import { defaultBlueprintQuestion } from './projectData'
 import { validateTeamSetupDraft } from './setupValidation'
-import { workspaceTabs, type AiStatus, type BuildGuideStep, type ChatSuggestion, type ProjectData, type ProjectSummary, type Team, type WorkspaceTab } from './types'
+import { workspaceTabs, type AiStatus, type ChatSuggestion, type ProjectData, type ProjectSummary, type Team, type WorkspaceTab } from './types'
 import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
+import {
+  buildGuideRows as deriveBuildGuideRows,
+  cadPreview as deriveCadPreview,
+  displayedCode as deriveDisplayedCode,
+  mergeInventory,
+  parseInventoryText,
+  priorityOptions,
+  strategyModes,
+  wizardSteps,
+} from './workspaceUtils'
 
 type WorkspaceProps = {
   project: ProjectData
@@ -53,31 +63,6 @@ type WorkspaceProps = {
   applyChatSuggestion: (suggestion: ChatSuggestion) => void
   downloadCode: () => void
 }
-
-const wizardSteps = [
-  { title: 'Team', copy: 'Identity, roster, location, and mentor coverage.' },
-  { title: 'Resources', copy: 'Budget, tools, space, inventory, and supplier preference.' },
-  { title: 'Strategy', copy: 'AI, team-provided, or hybrid planning with priorities.' },
-  { title: 'Review', copy: 'Confirm the packet inputs before generation.' },
-]
-
-const priorityOptions = [
-  'Low cost',
-  'Easy to build',
-  'Fast drivetrain',
-  'Strong endgame',
-  'Reliable autonomous',
-  'Simple driver control',
-  'Easy maintenance',
-  'Maximum scoring potential',
-  'Alliance-friendly reliability',
-]
-
-const strategyModes = [
-  { value: 'ai', label: 'AI-generated', copy: 'Blueprint proposes the initial strategy from constraints.' },
-  { value: 'team-provided', label: 'Team-provided', copy: 'Students drive the strategy; Blueprint checks and packages it.' },
-  { value: 'hybrid', label: 'Hybrid', copy: 'Students set direction while Blueprint fills gaps and tradeoffs.' },
-]
 
 export function Workspace({
   project,
@@ -108,23 +93,9 @@ export function Workspace({
 }: WorkspaceProps) {
   const selected = project.concepts[selectedConcept] ?? project.concepts[0]
   const isVertexGenerated = project.generatedBy?.startsWith('vertex')
-  const generatedCodeEntries = Object.entries(project.code || {})
-  const displayedCodeFile = generatedCodeEntries.find(([fileName]) => /TeleOpMain\.java$/i.test(fileName)) || generatedCodeEntries[0]
-  const displayedCode = displayedCodeFile
-    ? `// ${displayedCodeFile[0]}\n${displayedCodeFile[1]}`
-    : '// Generate a project to load FTC SDK starter code.'
-  const cadPreview = project.cad
-    ? JSON.stringify({
-      generatedBy: project.cad.generatedBy,
-      disclaimer: project.cad.disclaimer,
-      robotDimensionsMm: project.cad.robotDimensionsMm,
-      subsystemLayout: project.cad.subsystemLayout,
-      verificationNotes: project.cad.verificationNotes,
-    }, null, 2)
-    : JSON.stringify(project.season?.robotConstraints || [], null, 2)
-  const buildGuideRows: BuildGuideStep[] = project.buildGuide?.length
-    ? project.buildGuide
-    : project.buildSteps.map((step) => ({ phase: 'Build', instructions: step }))
+  const displayedCode = useMemo(() => deriveDisplayedCode(project), [project])
+  const cadPreview = useMemo(() => deriveCadPreview(project), [project])
+  const buildGuideRows = useMemo(() => deriveBuildGuideRows(project), [project])
   const [teamDraftState, setTeamDraftState] = useState<{ projectId?: string, team: Team }>(() => ({
     projectId: project.id,
     team: project.team,
@@ -183,15 +154,8 @@ export function Workspace({
     const file = event.target.files?.[0]
     if (!file) return
     const text = await file.text()
-    const imported = text
-      .split(/\r?\n/)
-      .map((line) => line.split(/,|\t/).map((cell) => cell.trim()).find((cell) => (
-        cell &&
-        !/^(item|part|parts|sku|qty|quantity|inventory)$/i.test(cell) &&
-        !/^\d+(\.\d+)?$/.test(cell)
-      )))
-      .filter((item): item is string => Boolean(item))
-    const nextInventory = Array.from(new Set([...(teamDraft.inventory || []), ...imported]))
+    const imported = parseInventoryText(text)
+    const nextInventory = mergeInventory(teamDraft, imported)
     setTeamDraft((current) => ({ ...current, inventory: nextInventory }))
     setInventoryUploadStatus(imported.length ? `Imported ${imported.length} inventory lines` : 'No inventory rows found')
     event.target.value = ''
@@ -316,7 +280,7 @@ export function Workspace({
             <MessageSquareText size={18} />
             Ask Blueprint
           </button>
-          <span>{status || 'Ready'}</span>
+          <span role="status" aria-live="polite">{status || 'Ready'}</span>
         </div>
       </section>
 

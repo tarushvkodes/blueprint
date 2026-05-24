@@ -989,14 +989,7 @@ function projectContextForPrompts(project) {
 
 export function buildAgentPrompts(project) {
   const context = projectContextForPrompts(project);
-  const system = [
-    'You are Blueprint, an FTC engineering workspace assistant.',
-    'Prioritize student learning, FTC legality, conservative engineering assumptions, budget limits, and editable outputs.',
-    'Never make a definitive rule-sensitive claim without citations from indexed official documents.',
-    'When evidence is missing, say what must be checked and produce a safe next step instead of guessing.',
-    'Show formulas, assumptions, inputs, calculations, result, safety factor, and warning thresholds for mechanism advice.',
-    'Generate FTC SDK Java using only selected libraries and case-sensitive hardware names from the project.',
-  ].join('\n');
+  const system = blueprintSystemPrompt();
   const citationRule = 'Return rule-sensitive statements with ruleNumber, manualSection, sourceDocument, version, explanation, and confidence.';
   return {
     system,
@@ -1005,72 +998,82 @@ export function buildAgentPrompts(project) {
       {
         name: 'Intake Agent',
         purpose: 'Normalize team profile, constraints, inventory, timeline, skill level, and priorities.',
-        prompt: `${system}\n\nUse the project context to identify missing onboarding fields. Ask only questions that materially affect strategy, legality, BOM, physics, CAD, or code outputs.\n\nReturn JSON: { missingFields, inferredConstraints, riskFlags, nextQuestions }.`,
+        prompt: 'Use the project context to identify missing onboarding fields. Ask only questions that materially affect strategy, legality, BOM, physics, CAD, or code outputs.\n\nReturn JSON: { missingFields, inferredConstraints, riskFlags, nextQuestions }.',
       },
       {
         name: 'Rules Agent',
         purpose: 'Ground legal/rules checks in the indexed manual and updates.',
-        prompt: `${system}\n\nSearch the indexed manual chunks for the proposed design and strategy. ${citationRule} Refuse uncited legality claims.\n\nReturn JSON: { likelyAllowed, blockers, inspectionChecklist, citations, unresolvedQuestions }.`,
+        prompt: `Search the indexed manual chunks for the proposed design and strategy. ${citationRule} Refuse uncited legality claims.\n\nReturn JSON: { likelyAllowed, blockers, inspectionChecklist, citations, unresolvedQuestions }.`,
       },
       {
         name: 'Strategy Agent',
         purpose: 'Turn game scoring, skill level, budget, and timeline into priorities.',
-        prompt: `${system}\n\nRecommend what to score, what to ignore, autonomous plan, teleop plan, endgame stance, alliance fit, and driver practice goals. Cite game-sensitive claims.\n\nReturn JSON: { recommendation, scoringPriorities, ignoreList, autonomous, teleop, endgame, allianceCompatibility, citations }.`,
+        prompt: 'Recommend what to score, what to ignore, autonomous plan, teleop plan, endgame stance, alliance fit, and driver practice goals. Cite game-sensitive claims.\n\nReturn JSON: { recommendation, scoringPriorities, ignoreList, autonomous, teleop, endgame, allianceCompatibility, citations }.',
       },
       {
         name: 'Mechanical Design Agent',
         purpose: 'Generate three feasible robot concepts and merge options.',
-        prompt: `${system}\n\nCreate exactly three robot concepts: conservative, balanced, and high-ceiling. Include difficulty, cost, build time, tools, mechanisms, pros, cons, risks, rule concerns, and upgrade path.\n\nReturn JSON: { concepts: [...] }.`,
+        prompt: 'Create exactly three robot concepts: conservative, balanced, and high-ceiling. Include difficulty, cost, build time, tools, mechanisms, pros, cons, risks, rule concerns, and upgrade path.\n\nReturn JSON: { concepts: [...] }.',
       },
       {
         name: 'Parts Agent',
         purpose: 'Build REV-first BOMs from the parsed catalog.',
-        prompt: `${system}\n\nUse only catalog parts with SKU/productUrl when possible. Mark unknown availability as lastChecked. Split required, optional, spares, alreadyOwned, missing, substitutions, and buyFirst priorities.\n\nReturn JSON: { required, optional, spareParts, alreadyOwned, missing, subtotal, budgetRemaining, substitutions }.`,
+        prompt: 'Use only catalog parts with SKU/productUrl when possible. Mark unknown availability as lastChecked. Split required, optional, spares, alreadyOwned, missing, substitutions, and buyFirst priorities.\n\nReturn JSON: { required, optional, spareParts, alreadyOwned, missing, subtotal, budgetRemaining, substitutions }.',
       },
       {
         name: 'Physics Agent',
         purpose: 'Verify mechanisms with math before recommendation.',
-        prompt: `${system}\n\nFor each mechanism calculate torque, RPM, speed, force, safety margin, current/battery risk if possible, and warning thresholds. Use conservative defaults when inputs are missing and label assumptions.\n\nReturn JSON: { calculations: [{ mechanism, assumptions, formula, calculation, result, safetyFactor, recommendation, warning }] }.`,
+        prompt: 'For each mechanism calculate torque, RPM, speed, force, safety margin, current/battery risk if possible, and warning thresholds. Use conservative defaults when inputs are missing and label assumptions.\n\nReturn JSON: { calculations: [{ mechanism, assumptions, formula, calculation, result, safetyFactor, recommendation, warning }] }.',
       },
       {
         name: 'CAD Agent',
         purpose: 'Create conceptual CAD starter specs, not manufacturing promises.',
-        prompt: `${system}\n\nGenerate a parametric CAD plan for browser preview and future CadQuery export. Include robot envelope, subsystem placement, mounting points, views, wiring view, and verification notes. Label it conceptual.\n\nReturn JSON: { disclaimer, robotDimensionsMm, subsystemLayout, mountingPoints, views, exportPlan }.`,
+        prompt: 'Generate a parametric CAD plan for browser preview and future CadQuery export. Include robot envelope, subsystem placement, mounting points, views, wiring view, and verification notes. Label it conceptual.\n\nReturn JSON: { disclaimer, robotDimensionsMm, subsystemLayout, mountingPoints, views, exportPlan }.',
       },
       {
         name: 'Code Agent',
         purpose: 'Generate FTC SDK Java starter code aligned to selected hardware.',
-        prompt: `${system}\n\nGenerate Java files for RobotHardware, DriveSubsystem, LiftSubsystem, TeleOpMain, AutoMain, Constants, and README. Use FTC SDK imports, safe power clipping, telemetry, hardware init errors, and case-sensitive names.\n\nReturn JSON: { files: [{ fileName, language, content }], hardwareConfigurationChecklist }.`,
+        prompt: 'Generate Java files for RobotHardware, DriveSubsystem, LiftSubsystem, TeleOpMain, AutoMain, Constants, and README. Use FTC SDK imports, safe power clipping, telemetry, hardware init errors, and case-sensitive names.\n\nReturn JSON: { files: [{ fileName, language, content }], hardwareConfigurationChecklist }.',
       },
       {
         name: 'Build Guide Agent',
         purpose: 'Create LEGO-style assembly steps with tests.',
-        prompt: `${system}\n\nCreate build phases with step number, title, parts, tools, estimated time, instruction, safety warning, checkpoint, common mistake, and test before continuing.\n\nReturn JSON: { buildSteps }.`,
+        prompt: 'Create build phases with step number, title, parts, tools, estimated time, instruction, safety warning, checkpoint, common mistake, and test before continuing.\n\nReturn JSON: { buildSteps }.',
       },
       {
         name: 'Driver Optimization Agent',
         purpose: 'Analyze gamepad logs and propose better control layout.',
-        prompt: `${system}\n\nAnalyze button/stick usage, repeated sequences, timing gaps, failed actions, and phase context. Recommend remaps, macros, toggles vs holds, deadzones, slow mode, presets, and driver1/driver2 ownership.\n\nReturn JSON: { buttonUsage, repeatedSequences, suggestions, recommendedMap }.`,
+        prompt: 'Analyze button/stick usage, repeated sequences, timing gaps, failed actions, and phase context. Recommend remaps, macros, toggles vs holds, deadzones, slow mode, presets, and driver1/driver2 ownership.\n\nReturn JSON: { buttonUsage, repeatedSequences, suggestions, recommendedMap }.',
       },
       {
         name: 'Grant Agent',
         purpose: 'Draft sponsor/grant materials from team and budget context.',
-        prompt: `${system}\n\nDraft sponsor email, grant narrative, budget justification, donation tiers, follow-up email, thank-you email, and outreach tracker fields. Keep claims truthful and editable.\n\nReturn JSON: { sponsorEmail, grantDraft, budgetJustification, tiers, followUp, thankYou }.`,
+        prompt: 'Draft sponsor email, grant narrative, budget justification, donation tiers, follow-up email, thank-you email, and outreach tracker fields. Keep claims truthful and editable.\n\nReturn JSON: { sponsorEmail, grantDraft, budgetJustification, tiers, followUp, thankYou }.',
       },
       {
         name: 'Review Agent',
         purpose: 'Catch contradictions and unsafe overclaims before output.',
-        prompt: `${system}\n\nReview the whole plan for uncited rules, impossible parts, budget mismatch, missing physics, code/CAD mismatch, unsafe build advice, and overpromised CAD. Return required fixes before final output.\n\nReturn JSON: { pass, blockers, warnings, fixes, finalCaveats }.`,
+        prompt: 'Review the whole plan for uncited rules, impossible parts, budget mismatch, missing physics, code/CAD mismatch, unsafe build advice, and overpromised CAD. Return required fixes before final output.\n\nReturn JSON: { pass, blockers, warnings, fixes, finalCaveats }.',
       },
     ],
   };
 }
 
+function blueprintSystemPrompt() {
+  return [
+    'You are Blueprint, an FTC engineering workspace assistant.',
+    'Prioritize student learning, FTC legality, conservative engineering assumptions, budget limits, and editable outputs.',
+    'Never make a definitive rule-sensitive claim without citations from indexed official documents.',
+    'When evidence is missing, say what must be checked and produce a safe next step instead of guessing.',
+    'Show formulas, assumptions, inputs, calculations, result, safety factor, and warning thresholds for mechanism advice.',
+    'Generate FTC SDK Java using only selected libraries and case-sensitive hardware names from the project.',
+  ].join('\n');
+}
+
 function projectAiPrompt(project) {
   const season = currentSeasonSource(project);
   return [
-    'You are Blueprint, an FTC engineering workspace assistant.',
-    'Return only valid JSON. Make a year-agnostic FTC robot packet from only the season/manual facts and team requirements below.',
+    'Make a year-agnostic FTC robot packet from only the season/manual facts and team requirements below.',
     'Never invent point values, rule numbers, exact legal guarantees, SKU prices, or official approvals. If a fact is not in the source context, describe it as something to verify.',
     'Never make definitive legality claims. Leave rule-sensitive wording unresolved unless a cited source is provided by the context.',
     'JSON shape: { strategy, concepts, bom, physics, cad, code, autonomousPlan, buildGuide, sponsorDesk, chatSeed }.',
@@ -1105,7 +1108,6 @@ function projectAiPrompt(project) {
 function projectAiConceptRepairPrompt(project, rejectedConcepts, qualityIssues = []) {
   const season = currentSeasonSource(project);
   return [
-    'Return only valid JSON: { "concepts": [...] }.',
     'Repair the rejected FTC robot concepts into exactly three complete robot architectures.',
     'Do not make each concept a single subsystem. Each concept must be a full robot plan.',
     'Required concept shape: { conceptIntent, id, name, strategyFit, difficulty, estimatedCost, buildTime, requiredTools, requiredParts, mainMechanisms, pros, cons, risks, upgradePath }.',
@@ -1345,7 +1347,10 @@ export function rebuildDerivedArtifacts(project, { preserveAi = true } = {}) {
 }
 
 export async function applyAiPacket(project) {
-  const ai = await callVertexJson({ prompt: projectAiPrompt(project) });
+  const ai = await callVertexJson({
+    systemPrompt: blueprintSystemPrompt(),
+    prompt: projectAiPrompt(project),
+  });
   if (!ai.ok) {
     project.generatedBy = 'local-fallback';
     project.aiFallbackReason = ai.error;
@@ -1358,7 +1363,10 @@ export async function applyAiPacket(project) {
   let conceptPacket = normalizeAiConcepts(ai.data.concepts, project.team, season);
   let conceptsRepaired = false;
   if (!conceptPacket.accepted && Array.isArray(ai.data.concepts)) {
-    const repair = await callVertexJson({ prompt: projectAiConceptRepairPrompt(project, ai.data.concepts, conceptPacket.issues) });
+    const repair = await callVertexJson({
+      systemPrompt: blueprintSystemPrompt(),
+      prompt: projectAiConceptRepairPrompt(project, ai.data.concepts, conceptPacket.issues),
+    });
     if (repair.ok) {
       conceptPacket = normalizeAiConcepts(repair.data.concepts, project.team, season);
       if (conceptPacket.accepted) {

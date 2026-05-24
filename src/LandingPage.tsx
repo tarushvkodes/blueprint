@@ -11,9 +11,8 @@ import {
   Sparkles,
   WandSparkles,
 } from 'lucide-react'
-import { useRef } from 'react'
+import { lazy, Suspense, useRef } from 'react'
 import { useLandingAnimations } from './hooks/useLandingAnimations'
-import { RobotPreview } from './RobotPreview'
 import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
 import {
   agentRows,
@@ -25,6 +24,8 @@ import {
   profilePriorities,
 } from './projectData'
 import type { Concept, ProjectData, WorkspaceTab } from './types'
+
+const RobotPreview = lazy(() => import('./RobotPreview').then((module) => ({ default: module.RobotPreview })))
 
 type LandingPageProps = {
   project: ProjectData
@@ -141,7 +142,9 @@ export function LandingPage({
               <ShieldCheck size={18} />
             </div>
             <div className="robot-stage">
-              <RobotPreview />
+              <Suspense fallback={<div className="robot-preview-loading" aria-hidden="true" />}>
+                <RobotPreview />
+              </Suspense>
             </div>
             <div className="hero-hud-grid" aria-label="Selected robot concept">
               <span>
@@ -334,7 +337,9 @@ export function LandingPage({
 
       <section className="cad-code-section" id="cad">
         <div className="cad-panel liquid-glass image-scale">
-          <RobotPreview />
+          <Suspense fallback={<div className="robot-preview-loading" aria-hidden="true" />}>
+            <RobotPreview />
+          </Suspense>
           <div className="cad-overlay">
             <Layers3 size={20} />
             <span>Conceptual CAD starter: top, side, isometric, wiring, and exploded views.</span>

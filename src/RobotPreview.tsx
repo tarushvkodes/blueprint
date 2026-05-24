@@ -1,105 +1,54 @@
-import { Canvas, useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import type { Group } from 'three'
-
-function RobotModel() {
-  const chassisRef = useRef<Group>(null)
-  const wheelPositions = useMemo(
-    () => [
-      [-1.72, -0.26, -1.05],
-      [-1.72, -0.26, 1.05],
-      [1.72, -0.26, -1.05],
-      [1.72, -0.26, 1.05],
-    ] as const,
-    [],
-  )
-  const railPositions = useMemo(
-    () => [
-      [0, 0.02, -1.28],
-      [0, 0.02, 1.28],
-      [-1.92, 0.02, 0],
-      [1.92, 0.02, 0],
-    ] as const,
-    [],
-  )
-
-  useFrame(({ clock }) => {
-    if (!chassisRef.current) return
-    const elapsed = clock.getElapsedTime()
-    chassisRef.current.rotation.y = -0.62 + Math.sin(elapsed * 0.32) * 0.24
-    chassisRef.current.rotation.x = 0.12 + Math.sin(elapsed * 0.48) * 0.035
-    chassisRef.current.position.y = Math.sin(elapsed * 0.72) * 0.045
-  })
-
-  return (
-    <group ref={chassisRef} rotation={[0.14, -0.62, 0]}>
-      <mesh position={[0, -0.42, 0]} rotation={[0, Math.PI / 4, 0]}>
-        <circleGeometry args={[3.25, 64]} />
-        <meshStandardMaterial color="#0f1d18" roughness={0.9} metalness={0.05} transparent opacity={0.76} />
-      </mesh>
-
-      <group>
-        {railPositions.map(([x, y, z], index) => (
-          <mesh key={`${x}-${z}`} position={[x, y, z]} rotation={[0, index > 1 ? 0 : Math.PI / 2, 0]}>
-            <boxGeometry args={index > 1 ? [0.18, 0.2, 2.72] : [0.18, 0.2, 3.94]} />
-            <meshStandardMaterial color="#dce8dc" roughness={0.35} metalness={0.58} />
-          </mesh>
-        ))}
-      </group>
-
-      <mesh position={[0, 0.04, 0]}>
-        <boxGeometry args={[3.34, 0.24, 2.22]} />
-        <meshStandardMaterial color="#cfdcd1" roughness={0.42} metalness={0.42} />
-      </mesh>
-
-      <mesh position={[0, 0.25, 0]}>
-        <boxGeometry args={[2.38, 0.18, 1.52]} />
-        <meshStandardMaterial color="#14251f" roughness={0.55} metalness={0.18} />
-      </mesh>
-
-      {wheelPositions.map(([x, y, z]) => (
-        <mesh key={`${x}-${y}-${z}`} position={[x, y, z]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.36, 0.36, 0.3, 36]} />
-          <meshStandardMaterial color="#111713" roughness={0.32} metalness={0.14} />
-        </mesh>
-      ))}
-
-      <mesh position={[0.74, 1, 0]}>
-        <boxGeometry args={[0.42, 1.92, 0.34]} />
-        <meshStandardMaterial color="#c79a3e" roughness={0.32} metalness={0.34} />
-      </mesh>
-
-      <mesh position={[1.12, 1.86, 0]} rotation={[0, 0, -0.45]}>
-        <boxGeometry args={[1.42, 0.2, 0.22]} />
-        <meshStandardMaterial color="#e7f4ed" emissive="#345548" emissiveIntensity={0.08} roughness={0.28} metalness={0.24} />
-      </mesh>
-
-      <mesh position={[1.68, 2.12, 0.18]} rotation={[0, 0, -0.2]}>
-        <boxGeometry args={[0.62, 0.12, 0.16]} />
-        <meshStandardMaterial color="#74c5aa" roughness={0.28} metalness={0.35} />
-      </mesh>
-
-      <mesh position={[-0.68, 0.38, 0]}>
-        <boxGeometry args={[0.82, 0.48, 1.12]} />
-        <meshStandardMaterial color="#1f6a5b" roughness={0.46} metalness={0.16} />
-      </mesh>
-
-      <mesh position={[-0.68, 0.72, 0]}>
-        <boxGeometry args={[0.56, 0.08, 1.22]} />
-        <meshStandardMaterial color="#f3c86f" emissive="#6a4f16" emissiveIntensity={0.12} roughness={0.34} metalness={0.28} />
-      </mesh>
-    </group>
-  )
-}
-
 export function RobotPreview() {
   return (
-    <Canvas camera={{ position: [4.8, 3.4, 6.4], fov: 38 }} dpr={[1, 1.75]}>
-      <ambientLight intensity={0.72} />
-      <directionalLight position={[4, 5, 3]} intensity={1.6} />
-      <pointLight position={[-3, 2, -2]} intensity={1.4} color="#74c5aa" />
-      <spotLight position={[1.8, 4.8, 2.2]} angle={0.5} penumbra={0.7} intensity={2.2} color="#f3c86f" />
-      <RobotModel />
-    </Canvas>
+    <div className="robot-preview" aria-hidden="true">
+      <svg viewBox="0 0 720 520" role="img">
+        <defs>
+          <linearGradient id="robotRail" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#f4fbf5" />
+            <stop offset="54%" stopColor="#b8c8bd" />
+            <stop offset="100%" stopColor="#eef8f0" />
+          </linearGradient>
+          <linearGradient id="robotAccent" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#f3c86f" />
+            <stop offset="100%" stopColor="#74c5aa" />
+          </linearGradient>
+          <filter id="robotShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="22" stdDeviation="18" floodColor="#06100d" floodOpacity="0.38" />
+          </filter>
+        </defs>
+
+        <ellipse className="robot-shadow" cx="360" cy="405" rx="240" ry="58" />
+        <g className="robot-body" filter="url(#robotShadow)">
+          <path className="robot-deck" d="M167 283 354 190 552 271 366 371Z" />
+          <path className="robot-side" d="M167 283 366 371 366 409 167 320Z" />
+          <path className="robot-front" d="M366 371 552 271 552 309 366 409Z" />
+
+          <path className="robot-rail" d="M195 278 356 199 526 269" />
+          <path className="robot-rail" d="M184 315 366 397 535 305" />
+          <path className="robot-crossbar" d="M249 250 441 334" />
+          <path className="robot-crossbar" d="M451 238 269 336" />
+
+          <g className="robot-wheel robot-wheel-a">
+            <ellipse cx="199" cy="331" rx="39" ry="22" />
+            <path d="M168 321 230 350" />
+          </g>
+          <g className="robot-wheel robot-wheel-b">
+            <ellipse cx="320" cy="386" rx="42" ry="23" />
+            <path d="M286 375 354 405" />
+          </g>
+          <g className="robot-wheel robot-wheel-c">
+            <ellipse cx="496" cy="318" rx="43" ry="24" />
+            <path d="M461 307 532 339" />
+          </g>
+
+          <path className="robot-column" d="M421 228 459 247 459 134 421 116Z" />
+          <path className="robot-arm" d="M449 130 554 177 532 196 426 148Z" />
+          <path className="robot-claw" d="M526 190 593 217 576 230 514 204Z" />
+          <path className="robot-claw robot-claw-lower" d="M518 207 581 238 559 251 500 219Z" />
+          <path className="robot-control" d="M270 247 344 281 344 329 270 296Z" />
+          <path className="robot-led" d="M282 253 333 277" />
+        </g>
+      </svg>
+    </div>
   )
 }

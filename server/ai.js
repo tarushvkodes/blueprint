@@ -46,7 +46,7 @@ export function aiStatus() {
   };
 }
 
-function extractJson(text) {
+export function extractVertexJson(text) {
   if (!text) return null;
   const trimmed = text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
   try {
@@ -69,22 +69,38 @@ function extractJson(text) {
   }
 }
 
-function requestBody(prompt) {
+function textContent(text) {
   return {
+    parts: [{ text }],
+  };
+}
+
+export function buildVertexRequestBody({ prompt, systemPrompt, temperature = 0.35, responseSchema = null }) {
+  const userPrompt = [
+    'Return strict JSON only. Do not include markdown fences, commentary, or trailing prose.',
+    prompt,
+  ].filter(Boolean).join('\n\n');
+
+  const body = {
     contents: [{
       role: 'user',
-      parts: [{
-        text: [
-          'Return strict JSON only. Do not include markdown fences, commentary, or trailing prose.',
-          prompt,
-        ].join('\n\n'),
-      }],
+      parts: [{ text: userPrompt }],
     }],
     generationConfig: {
-      temperature: 0.35,
+      temperature,
       responseMimeType: 'application/json',
     },
   };
+
+  if (systemPrompt) {
+    body.systemInstruction = textContent(systemPrompt);
+  }
+
+  if (responseSchema) {
+    body.generationConfig.responseSchema = responseSchema;
+  }
+
+  return body;
 }
 
 function expressEndpoint(model) {
@@ -128,7 +144,29 @@ function unverifiedVertexMessage() {
   return 'Vertex is configured but has not passed a smoke test in this server session. Run POST /api/ai/smoke-test to verify credentials before live AI calls.';
 }
 
-export async function callVertexJson({ prompt, model = vertexConfig.textModel, allowUnverified = false }) {
+function responseTextFromPayload(payload) {
+  return payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('\n') || '';
+}
+
+function responseErrorFromPayload(payload, status = null) {
+  const candidate = payload.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const finishMessage = candidate?.finishMessage;
+  if (payload.error?.message) return payload.error.message;
+  if (finishMessage) return finishMessage;
+  if (finishReason && finishReason !== 'STOP') return `Vertex stopped generation with finishReason=${finishReason}.`;
+  if (status === null) return null;
+  return `Vertex request failed with ${status}`;
+}
+
+export async function callVertexJson({
+  prompt,
+  systemPrompt,
+  model = vertexConfig.textModel,
+  allowUnverified = false,
+  temperature = 0.35,
+  responseSchema = null,
+}) {
   const provider = vertexProvider();
   if (provider === 'local-fallback') {
     state.ai.lastProvider = 'local-fallback';
@@ -150,7 +188,7 @@ export async function callVertexJson({ prompt, model = vertexConfig.textModel, a
   }
 
   const endpoint = provider === 'vertex-express' ? expressEndpoint(model) : adcEndpoint(model);
-  const body = requestBody(prompt);
+  const body = buildVertexRequestBody({ prompt, systemPrompt, temperature, responseSchema });
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const started = Date.now();
@@ -169,11 +207,13 @@ export async function callVertexJson({ prompt, model = vertexConfig.textModel, a
       }), vertexConfig.timeoutMs, `Vertex request timed out after ${vertexConfig.timeoutMs}ms.`, () => controller.abort());
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.error?.message || `Vertex request failed with ${response.status}`);
+        throw new Error(responseErrorFromPayload(payload, response.status));
       }
-      const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('\n') || '';
-      const data = extractJson(text);
-      if (!data) throw new Error('Vertex response did not contain valid JSON.');
+      const text = responseTextFromPayload(payload);
+      const data = extractVertexJson(text);
+      if (!data) {
+        throw new Error(responseErrorFromPayload(payload) || 'Vertex response did not contain valid JSON.');
+      }
       state.ai.lastError = null;
       state.ai.lastOkAt = new Date().toISOString();
       state.ai.lastProvider = provider;
@@ -195,6 +235,7 @@ export async function callVertexJson({ prompt, model = vertexConfig.textModel, a
 export async function smokeTestVertex() {
   state.ai.lastSmokeTestAt = new Date().toISOString();
   const result = await callVertexJson({
+    systemPrompt: 'You are a JSON-only Vertex AI connectivity checker.',
     prompt: 'Return JSON exactly matching this shape: { "ok": true, "service": "vertex", "checks": ["json"] }.',
     allowUnverified: true,
   });

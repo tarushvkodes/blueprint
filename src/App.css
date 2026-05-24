@@ -20,6 +20,14 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
 }
 
+.route-loading {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  color: rgba(238, 248, 240, 0.78);
+  font-weight: 800;
+}
+
 .nav-shell,
 .hero-section,
 .onboarding-section,
@@ -45,7 +53,11 @@
   z-index: 0;
   pointer-events: none;
   opacity: 0.58;
-  transform: scale(1.08);
+  background:
+    radial-gradient(ellipse at 12% 18%, rgba(255, 244, 207, 0.28), transparent 34rem),
+    radial-gradient(ellipse at 72% 6%, rgba(121, 199, 173, 0.24), transparent 30rem),
+    radial-gradient(ellipse at 86% 74%, rgba(196, 153, 61, 0.16), transparent 32rem);
+  transform: translateZ(0) scale(1.08);
 }
 
 .shader-backdrop::after {
@@ -60,6 +72,10 @@
 .shader-backdrop-workspace {
   opacity: 0.34;
   filter: saturate(0.82) contrast(1.08);
+  background:
+    radial-gradient(ellipse at 10% 10%, rgba(231, 244, 237, 0.22), transparent 30rem),
+    radial-gradient(ellipse at 82% 18%, rgba(116, 197, 170, 0.2), transparent 30rem),
+    radial-gradient(ellipse at 74% 88%, rgba(196, 153, 61, 0.13), transparent 34rem);
 }
 
 .liquid-glass {
@@ -115,11 +131,24 @@
   place-items: center;
   border-radius: 50%;
   filter: contrast(1.06) saturate(0.95);
+  background:
+    radial-gradient(circle at 26% 18%, #fff8e9, transparent 24%),
+    conic-gradient(from 64deg, #0a1411, #f7f1d7, #74c5aa, #c4993d, #0a1411);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    inset 0 -10px 18px rgba(7, 17, 14, 0.42);
 }
 
-.liquid-logo-mark > * {
-  width: 100% !important;
-  height: 100% !important;
+.liquid-logo-mark i {
+  display: block;
+  width: 52%;
+  height: 52%;
+  border-radius: 5px;
+  background: #0a1411;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 16px rgba(7, 17, 14, 0.34);
+  transform: rotate(45deg);
 }
 
 .nav-shell {
@@ -374,9 +403,120 @@ button:active,
   min-height: 430px;
 }
 
+.robot-preview {
+  width: 100%;
+  height: 100%;
+  min-height: 430px;
+}
+
+.robot-preview svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.robot-body {
+  transform-origin: 360px 280px;
+  animation: robot-float 7s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+}
+
+.robot-shadow {
+  fill: rgba(7, 17, 14, 0.42);
+}
+
+.robot-deck {
+  fill: rgba(231, 244, 237, 0.88);
+}
+
+.robot-side {
+  fill: rgba(88, 113, 101, 0.92);
+}
+
+.robot-front {
+  fill: rgba(183, 203, 191, 0.92);
+}
+
+.robot-rail,
+.robot-crossbar,
+.robot-led {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.robot-rail {
+  stroke: url("#robotRail");
+  stroke-width: 16;
+}
+
+.robot-crossbar {
+  stroke: rgba(16, 34, 28, 0.72);
+  stroke-width: 10;
+}
+
+.robot-wheel ellipse {
+  fill: #111713;
+  stroke: #34443c;
+  stroke-width: 8;
+}
+
+.robot-wheel path {
+  fill: none;
+  stroke: rgba(238, 248, 240, 0.32);
+  stroke-linecap: round;
+  stroke-width: 6;
+}
+
+.robot-column,
+.robot-arm,
+.robot-claw {
+  fill: url("#robotAccent");
+}
+
+.robot-claw-lower {
+  opacity: 0.84;
+}
+
+.robot-control {
+  fill: #1f6a5b;
+}
+
+.robot-led {
+  stroke: #f3c86f;
+  stroke-width: 8;
+}
+
+@keyframes robot-float {
+  from {
+    transform: translateY(5px) rotate(-1deg);
+  }
+
+  to {
+    transform: translateY(-9px) rotate(1.25deg);
+  }
+}
+
 .robot-stage {
   position: absolute;
   inset: 76px 0 96px;
+}
+
+.robot-preview-loading {
+  width: 100%;
+  min-height: 430px;
+  background:
+    linear-gradient(110deg, rgba(238, 248, 240, 0.05), rgba(238, 248, 240, 0.13), rgba(238, 248, 240, 0.05));
+  background-size: 220% 100%;
+  animation: loading-sheen 1.4s ease-in-out infinite;
+}
+
+@keyframes loading-sheen {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
 }
 
 .hero-hud-grid {
