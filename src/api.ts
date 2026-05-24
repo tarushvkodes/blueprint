@@ -292,6 +292,57 @@ export async function askBlueprintQuestion(projectId: string, previousProject: P
   }
 }
 
+export async function streamBlueprintQuestion(
+  projectId: string,
+  message: string,
+  onToken: (text: string) => void,
+  onSuggestions?: (suggestions: ChatSuggestion[]) => void,
+) {
+  const response = await fetch(`${API_BASE}/projects/${projectId}/chat/stream`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ message }),
+  })
+
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => null)
+    throw new BlueprintApiError(response.status, payload)
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let answer = ''
+  const readEvent = (rawEvent: string) => {
+    const event = rawEvent.match(/^event:\s*(.+)$/m)?.[1]?.trim() || 'message'
+    const dataText = rawEvent.split(/\n/).filter((line) => line.startsWith('data:'))
+      .map((line) => line.replace(/^data:\s*/, '')).join('\n')
+    if (!dataText) return
+    const data = JSON.parse(dataText)
+    if ((event === 'meta' || event === 'done') && Array.isArray(data.suggestedActions)) {
+      onSuggestions?.(data.suggestedActions)
+    }
+    if (event === 'token' && typeof data.text === 'string') {
+      answer += data.text
+      onToken(data.text)
+    }
+    if (event === 'error') {
+      throw new BlueprintApiError(503, data)
+    }
+  }
+
+  const reader = response.body.getReader()
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split(/\n\n/)
+    buffer = events.pop() || ''
+    for (const event of events) readEvent(event)
+  }
+  if (buffer.trim()) readEvent(buffer)
+  return { answer }
+}
+
 export async function applyChatSuggestion(projectId: string, suggestion: ChatSuggestion, previousProject: ProjectData) {
   const data = await requestJson<{ project?: ApiProjectResponse; applied?: boolean; message?: string }>(`/projects/${projectId}/chat/apply`, {
     method: 'POST',

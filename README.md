@@ -9,7 +9,7 @@ The current repo is an MVP prototype. It is designed to run locally, use determi
 - React/TypeScript workspace with landing page and project tabs.
 - Express API for project generation, manual upload, REV catalog sync, BOMs, physics, CAD specs, FTC Java code, build guide, chat, grants, and driver logs.
 - Local fallback generators for concepts, strategy, BOM, physics, CAD layout, code, and build steps.
-- Optional Vertex AI JSON calls through either an Express Mode API key or Application Default Credentials.
+- Optional Google AI Studio JSON calls through the Gemini API.
 - REV Robotics public product page adapter with local cache.
 - PDF upload and basic keyword chunk search for rule citations.
 - Code ZIP export for generated FTC SDK Java starter files.
@@ -55,20 +55,16 @@ npm.cmd run dev
 Copy `.env.example` to `.env` when you want to configure the API.
 
 ```bash
-# Option A: Vertex AI Express Mode with API key.
-VERTEX_AI_API_KEY=
+# Google AI Studio / Gemini API key.
+# Create one at https://aistudio.google.com/app/apikey
+GOOGLE_AI_STUDIO_API_KEY=
 
-# Option B: Standard Vertex AI with Application Default Credentials.
-# Use this when your Google Cloud organization blocks API keys.
-VERTEX_AI_PROJECT=
-VERTEX_AI_LOCATION=us-central1
-
-VERTEX_TEXT_MODEL=gemini-2.5-flash
-VERTEX_IMAGE_MODEL=gemini-2.5-flash-image
+GOOGLE_AI_STUDIO_TEXT_MODEL=gemini-2.5-flash-lite
+GOOGLE_AI_STUDIO_IMAGE_MODEL=gemini-2.5-flash-image
 API_PORT=8787
 ```
 
-Without either `VERTEX_AI_API_KEY` or `VERTEX_AI_PROJECT`, Blueprint runs in `local-fallback` mode. For the ADC path, run `gcloud auth application-default login`, make sure the project has Vertex/Agent Platform APIs enabled, then set `VERTEX_AI_PROJECT` to the Google Cloud project ID.
+Without `GOOGLE_AI_STUDIO_API_KEY`, Blueprint runs in `local-fallback` mode. The server also accepts `GEMINI_API_KEY` for compatibility with common Gemini API examples.
 
 ## Repo Structure
 

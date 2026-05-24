@@ -23,7 +23,7 @@ import { useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { artifactUrl } from './api'
 import { defaultBlueprintQuestion } from './projectData'
 import { validateTeamSetupDraft } from './setupValidation'
-import { workspaceTabs, type AiStatus, type ChatSuggestion, type ProjectData, type ProjectSummary, type Team, type WorkspaceTab } from './types'
+import { workspaceTabs, type AiStatus, type ChatMessage, type ChatSuggestion, type ProjectData, type ProjectSummary, type Team, type WorkspaceTab } from './types'
 import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
 import {
   buildGuideRows as deriveBuildGuideRows,
@@ -44,8 +44,9 @@ type WorkspaceProps = {
   activeTab: WorkspaceTab
   setActiveTab: (tab: WorkspaceTab) => void
   status: string
-  chatAnswer: string
+  chatMessages: ChatMessage[]
   chatSuggestions: ChatSuggestion[]
+  chatStreaming: boolean
   aiStatus: AiStatus | null
   openLanding: () => void
   createProject: (team: Team) => void
@@ -72,8 +73,9 @@ export function Workspace({
   activeTab,
   setActiveTab,
   status,
-  chatAnswer,
+  chatMessages,
   chatSuggestions,
+  chatStreaming,
   aiStatus,
   openLanding,
   createProject,
@@ -92,7 +94,7 @@ export function Workspace({
   downloadCode,
 }: WorkspaceProps) {
   const selected = project.concepts[selectedConcept] ?? project.concepts[0]
-  const isVertexGenerated = project.generatedBy?.startsWith('vertex')
+  const isDemoGenerated = project.generatedBy === 'demo-ai'
   const displayedCode = useMemo(() => deriveDisplayedCode(project), [project])
   const cadPreview = useMemo(() => deriveCadPreview(project), [project])
   const buildGuideRows = useMemo(() => deriveBuildGuideRows(project), [project])
@@ -200,7 +202,7 @@ export function Workspace({
   const goNext = () => setActiveTab(nextTab)
   const handleGenerateBlueprint = async () => {
     const generated = await generateFullBlueprint(teamDraft)
-    if (generated?.generatedBy?.startsWith('vertex')) {
+    if (generated?.generatedBy === 'demo-ai') {
       setActiveTab('Strategy')
     }
   }
@@ -330,7 +332,7 @@ export function Workspace({
                   <h2>Blueprint setup</h2>
                   <p>Upload the official season manual, enter team requirements, then generate code, CAD, and build instructions.</p>
                 </div>
-                <strong>{isVertexGenerated ? 'Vertex AI' : 'Fallback'}</strong>
+                <strong>{isDemoGenerated ? 'Demo AI' : 'Fallback'}</strong>
               </div>
 
               <div className="setup-grid wizard-grid">
@@ -1044,19 +1046,33 @@ export function Workspace({
           )}
 
           {activeTab === 'Chat' && (
-            <div className="workspace-panel">
-              <h2>Ask Blueprint</h2>
-              <p>Use this as the iteration layer for strategy, legality, torque, code, grants, and driver controls.</p>
+            <div className="workspace-panel chat-workspace-panel">
+              <div className="workspace-panel-title chat-panel-title">
+                <div>
+                  <h2>Ask Blueprint</h2>
+                  <p>Live chat uses Google AI Studio with the deterministic demo packet as context.</p>
+                </div>
+                <span className={chatStreaming ? 'chat-live-pill is-streaming' : 'chat-live-pill'}>
+                  {chatStreaming ? 'Streaming' : 'AI Studio chat'}
+                </span>
+              </div>
+              <div className="chat-transcript" aria-live="polite">
+                {chatMessages.map((message) => (
+                  <article className={`chat-message is-${message.role} ${message.status === 'streaming' ? 'is-streaming' : ''} ${message.status === 'error' ? 'is-error' : ''}`} key={message.id}>
+                    <span>{message.role === 'assistant' ? 'Blueprint' : project.team.name}</span>
+                    <p>{message.content || 'Thinking through the robot packet...'}</p>
+                  </article>
+                ))}
+              </div>
               <div className="workspace-chat-row">
                 <textarea
                   value={chatDraft}
                   onChange={(event) => setChatDraft(event.target.value)}
                   onKeyDown={handleChatKeyDown}
-                  placeholder="/goal Build a reliable low-cost autonomous robot"
+                  placeholder="Ask about the BOM, autonomous path, torque margin, grants, or driver controls"
                 />
-                <button type="button" onClick={submitChat}><Send size={16} /> Send</button>
+                <button type="button" onClick={submitChat} disabled={chatStreaming}><Send size={16} /> Send</button>
               </div>
-              {chatAnswer && <p className="workspace-answer">{chatAnswer}</p>}
               {!!chatSuggestions.length && (
                 <div className="chat-suggestions">
                   {chatSuggestions.map((suggestion) => (
