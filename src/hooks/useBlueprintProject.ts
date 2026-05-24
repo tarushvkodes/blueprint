@@ -14,13 +14,14 @@ import {
   regenerateProjectFromTeam,
   selectProjectDesign,
   startDemoRun,
+  streamBlueprintQuestion,
   syncRevCatalog as syncRevCatalogRequest,
   updateProjectIntake,
   updateBomOverride as updateBomOverrideRequest,
   uploadSeasonPdf,
 } from '../api'
 import { defaultBlueprintQuestion, fallbackProject } from '../projectData'
-import type { AiStatus, ChatSuggestion, ProjectData, ProjectSummary, Team } from '../types'
+import type { AiStatus, ChatMessage, ChatSuggestion, ProjectData, ProjectSummary, Team } from '../types'
 
 const lastProjectKey = 'blueprint:lastProjectId'
 
@@ -28,8 +29,16 @@ export function useBlueprintProject() {
   const [project, setProject] = useState<ProjectData>(fallbackProject)
   const [selectedConcept, setSelectedConcept] = useState(1)
   const [workspaceStatus, setWorkspaceStatus] = useState('')
-  const [chatAnswer, setChatAnswer] = useState('')
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: 'I have the demo robot packet loaded. Ask me to make the BOM cheaper, explain a physics margin, tune autonomous, or rewrite the grant story.',
+      status: 'complete',
+    },
+  ])
   const [chatSuggestions, setChatSuggestions] = useState<ChatSuggestion[]>([])
+  const [chatStreaming, setChatStreaming] = useState(false)
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null)
   const [projectList, setProjectList] = useState<ProjectSummary[]>([])
 
@@ -111,7 +120,7 @@ export function useBlueprintProject() {
       const nextProject = await startDemoRun(project)
       setProject(nextProject)
       setSelectedConcept(1)
-      setWorkspaceStatus('Demo generated with Vertex AI')
+      setWorkspaceStatus('Demo generated with deterministic AI')
       listProjects().then(setProjectList).catch(() => {})
       fetchAiStatus().then(setAiStatus).catch(() => {})
       return nextProject
@@ -139,7 +148,7 @@ export function useBlueprintProject() {
       const nextProject = await generateBlueprint(project.id || 'demo', team || project.team, project)
       setProject(nextProject)
       setSelectedConcept(1)
-      setWorkspaceStatus('Blueprint generated with Vertex AI')
+      setWorkspaceStatus('Blueprint generated with deterministic AI')
       listProjects().then(setProjectList).catch(() => {})
       fetchAiStatus().then(setAiStatus).catch(() => {})
       return nextProject
@@ -216,16 +225,53 @@ export function useBlueprintProject() {
   }, [])
 
   const askBlueprint = useCallback(async (message = defaultBlueprintQuestion) => {
-    setWorkspaceStatus('Asking Blueprint...')
+    const trimmed = message.trim()
+    if (!trimmed) return
+    setWorkspaceStatus('Streaming Blueprint chat...')
+    const userMessageId = `user-${Date.now()}`
+    const assistantMessageId = `assistant-${Date.now()}`
+    setChatMessages((current) => [
+      ...current,
+      { id: userMessageId, role: 'user', content: trimmed, status: 'complete' },
+      { id: assistantMessageId, role: 'assistant', content: '', status: 'streaming' },
+    ])
+    setChatStreaming(true)
     try {
       const id = project.id || 'demo'
-      const result = await askBlueprintQuestion(id, project, message)
-      if (result.project) setProject(result.project)
-      setChatAnswer(result.answer)
-      setChatSuggestions(result.suggestedActions)
-      setWorkspaceStatus(message.trim().toLowerCase().startsWith('/goal') ? 'Goal updated' : 'Answer ready')
+      if (trimmed.toLowerCase().startsWith('/goal')) {
+        const result = await askBlueprintQuestion(id, project, trimmed)
+        if (result.project) setProject(result.project)
+        setChatSuggestions(result.suggestedActions)
+        setChatMessages((current) => current.map((item) => (
+          item.id === assistantMessageId ? { ...item, content: result.answer, status: 'complete' } : item
+        )))
+        setWorkspaceStatus('Goal updated')
+        return
+      }
+      const result = await streamBlueprintQuestion(
+        id,
+        trimmed,
+        (token) => {
+          setChatMessages((current) => current.map((item) => (
+            item.id === assistantMessageId ? { ...item, content: item.content + token } : item
+          )))
+        },
+        setChatSuggestions,
+      )
+      setChatMessages((current) => current.map((item) => (
+        item.id === assistantMessageId
+          ? { ...item, content: item.content || result.answer || 'Blueprint returned no answer.', status: 'complete' }
+          : item
+      )))
+      setWorkspaceStatus('Answer ready')
     } catch {
+      const errorText = 'Chat needs a valid Google AI Studio API key. The rest of the demo packet is deterministic and ready.'
+      setChatMessages((current) => current.map((item) => (
+        item.id === assistantMessageId ? { ...item, content: errorText, status: 'error' } : item
+      )))
       setWorkspaceStatus('Chat request failed')
+    } finally {
+      setChatStreaming(false)
     }
   }, [project])
 
@@ -275,8 +321,9 @@ export function useBlueprintProject() {
     setSelectedConcept,
     total,
     workspaceStatus,
-    chatAnswer,
+    chatMessages,
     chatSuggestions,
+    chatStreaming,
     aiStatus: aiStatus ?? project.aiStatus ?? null,
     createProject,
     runDemo,

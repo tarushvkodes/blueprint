@@ -15,8 +15,9 @@ function App() {
     setSelectedConcept,
     total,
     workspaceStatus,
-    chatAnswer,
+    chatMessages,
     chatSuggestions,
+    chatStreaming,
     aiStatus,
     createProject,
     runDemo,
@@ -71,8 +72,9 @@ function App() {
           activeTab={activeWorkspaceTab}
           setActiveTab={setActiveWorkspaceTab}
           status={workspaceStatus}
-          chatAnswer={chatAnswer}
+          chatMessages={chatMessages}
           chatSuggestions={chatSuggestions}
+          chatStreaming={chatStreaming}
           aiStatus={aiStatus}
           openLanding={openLanding}
           createProject={createProject}

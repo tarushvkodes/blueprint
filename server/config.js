@@ -28,14 +28,12 @@ loadEnvFile();
 export const port = process.env.API_PORT || 8787;
 const downloadsDir = path.join(process.env.USERPROFILE || process.env.HOME || rootDir, 'Downloads');
 
-export const vertexConfig = {
-  apiKey: process.env.VERTEX_AI_API_KEY || '',
+export const googleAiStudioConfig = {
+  apiKey: process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GEMINI_API_KEY || '',
   forceFallback: process.env.BLUEPRINT_FORCE_LOCAL_FALLBACK === '1',
-  projectId: process.env.VERTEX_AI_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || '',
-  location: process.env.VERTEX_AI_LOCATION || 'us-central1',
-  textModel: process.env.VERTEX_TEXT_MODEL || 'gemini-2.5-flash',
-  imageModel: process.env.VERTEX_IMAGE_MODEL || 'gemini-2.5-flash-image',
-  timeoutMs: Number(process.env.VERTEX_TIMEOUT_MS || 45000),
+  textModel: process.env.GOOGLE_AI_STUDIO_TEXT_MODEL || process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash-lite',
+  imageModel: process.env.GOOGLE_AI_STUDIO_IMAGE_MODEL || process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image',
+  timeoutMs: Number(process.env.GOOGLE_AI_STUDIO_TIMEOUT_MS || process.env.GEMINI_TIMEOUT_MS || 45000),
 };
 
 export const defaultFiles = {

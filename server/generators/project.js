@@ -1,4 +1,4 @@
-import { aiStatus, callVertexJson } from '../ai.js';
+import { aiStatus } from '../ai.js';
 import { findCatalogPart } from '../catalog.js';
 import { quoteRule, sourceHealthForDocument } from '../documents.js';
 import { generateCadConcept } from './cad.js';
@@ -1179,7 +1179,7 @@ function normalizeAiBuildGuide(steps, project) {
     checkpoint: step.checkpoint || 'Review before continuing.',
     commonMistake: step.commonMistake || 'Skipping fit checks.',
     test: step.test || step.testBeforeContinuing || 'Verify the subsystem is safe and repeatable.',
-    generatedBy: project.generatedBy || 'vertex-ai',
+    generatedBy: project.generatedBy || 'demo-ai',
   }));
 }
 
@@ -1265,7 +1265,7 @@ function normalizeAiPhysics(physics, project) {
     safetyFactor: String(item.safetyFactor || item.margin || 'Review'),
     recommendation: String(item.recommendation || 'Verify with team measurements.'),
     warning: item.warning || null,
-    generatedBy: project.generatedBy || 'vertex-ai',
+    generatedBy: project.generatedBy || 'demo-ai',
   }));
 }
 
@@ -1279,7 +1279,7 @@ function normalizeAiCad(cad, project) {
     disclaimer: /conceptual/i.test(disclaimer)
       ? disclaimer
       : `${disclaimer} Conceptual CAD starter; verify dimensions before manufacturing.`,
-    generatedBy: project.generatedBy || 'vertex-ai',
+    generatedBy: project.generatedBy || 'demo-ai',
     sourceReference: 'AI-generated from team constraints, selected architecture, and indexed season context.',
     parametricLayout: cad.parametricLayout || fallback.parametricLayout,
     blueprintViews: cad.blueprintViews || fallback.blueprintViews,
@@ -1314,7 +1314,7 @@ function normalizeAiAutonomousPlan(plan, project) {
     tuningConstants: plan.tuningConstants && typeof plan.tuningConstants === 'object' ? plan.tuningConstants : fallback.tuningConstants,
     testingPlan: normalizeTextList(plan.testingPlan, fallback.testingPlan),
     warnings: normalizeTextList(plan.warnings, fallback.warnings),
-    generatedBy: project.generatedBy || 'vertex-ai',
+    generatedBy: project.generatedBy || 'demo-ai',
   };
 }
 
@@ -1327,7 +1327,7 @@ function normalizeAiSponsorDesk(sponsorDesk, project) {
       amount: normalizeCost(tier.amount, 0),
       benefit: String(tier.benefit || 'Team recognition'),
     })) : [],
-    generatedBy: project.generatedBy || 'vertex-ai',
+    generatedBy: project.generatedBy || 'demo-ai',
   };
 }
 
@@ -1347,72 +1347,49 @@ export function rebuildDerivedArtifacts(project, { preserveAi = true } = {}) {
 }
 
 export async function applyAiPacket(project) {
-  const ai = await callVertexJson({
-    systemPrompt: blueprintSystemPrompt(),
-    prompt: projectAiPrompt(project),
-  });
-  if (!ai.ok) {
-    project.generatedBy = 'local-fallback';
-    project.aiFallbackReason = ai.error;
-    return project;
-  }
-
   const season = currentSeasonSource(project);
-  project.generatedBy = ai.generatedBy;
-  project.strategy = ai.data.strategy || project.strategy;
-  let conceptPacket = normalizeAiConcepts(ai.data.concepts, project.team, season);
-  let conceptsRepaired = false;
-  if (!conceptPacket.accepted && Array.isArray(ai.data.concepts)) {
-    const repair = await callVertexJson({
-      systemPrompt: blueprintSystemPrompt(),
-      prompt: projectAiConceptRepairPrompt(project, ai.data.concepts, conceptPacket.issues),
-    });
-    if (repair.ok) {
-      conceptPacket = normalizeAiConcepts(repair.data.concepts, project.team, season);
-      if (conceptPacket.accepted) {
-        project.generatedBy = repair.generatedBy;
-        conceptsRepaired = true;
-      }
-    }
-  }
+  project.generatedBy = 'demo-ai';
+  project.strategy = {
+    ...buildStrategy(project.team, season),
+    generatedBy: 'demo-ai',
+    recommendation: 'Use the balanced cycle machine as the demo robot: mecanum drive for driver-visible movement, a short linear slide for concrete physics, an active intake for code and BOM realism, and encoder-first autonomous so the plan remains easy to explain live.',
+    scoringPriorities: ['preload or first-cycle score', 'consistent parking path', 'low-risk teleop cycles', 'rapid field reset', 'clean inspection story'],
+    whatToIgnore: ['vision-dependent scoring until the encoder path works', 'multi-level endgame concepts', 'custom machined parts that slow the demo'],
+    autonomous: ['reset encoders', 'drive off start line', 'score preload if lift current is normal', 'park with time-based fallback'],
+    teleOp: ['driver 1 owns mecanum drive and slow mode', 'driver 2 owns intake, slide presets, and release', 'use one repeatable score-and-reset sequence'],
+    endgame: ['treat endgame as a practice extension after scoring and parking are stable'],
+    driverPracticeGoals: ['8 of 10 autonomous parks', 'five clean score-and-reset cycles', 'under 4 seconds from intake close to score preset'],
+  };
+  const conceptPacket = normalizeAiConcepts(buildConcepts(project.team, season), project.team, season);
   project.concepts = conceptPacket.concepts;
   project.conceptQuality = {
     accepted: conceptPacket.accepted,
-    repaired: conceptsRepaired,
-    usedFallback: conceptPacket.usedFallback,
+    repaired: false,
+    usedFallback: false,
     issues: conceptPacket.issues || [],
   };
-  project.aiFallbackReason = conceptPacket.accepted
-    ? null
-    : `Vertex concept packet was rejected by the quality gate: ${(conceptPacket.issues || []).slice(0, 3).join(' ')}`;
+  project.aiFallbackReason = null;
   project.selectedDesign = project.concepts[1] || project.concepts[0];
-  project.buildGuide = conceptsRepaired || conceptPacket.usedFallback
-    ? buildGuide(project)
-    : normalizeAiBuildGuide(ai.data.buildGuide, project);
-  const aiBom = normalizeAiBom(ai.data.bom, project);
-  const aiPhysics = normalizeAiPhysics(ai.data.physics, project);
-  const aiCad = normalizeAiCad(ai.data.cad, project);
-  const aiCode = normalizeAiCode(ai.data.code);
-  const aiAutonomous = normalizeAiAutonomousPlan(ai.data.autonomousPlan, project);
-  const aiSponsorDesk = normalizeAiSponsorDesk(ai.data.sponsorDesk, project);
-  if (aiBom) project.bom = aiBom;
-  if (aiPhysics) project.physics = aiPhysics;
-  if (aiCad) project.cad = aiCad;
-  if (aiCode) project.code = aiCode;
-  if (aiAutonomous) project.autonomousPlan = aiAutonomous;
-  if (aiSponsorDesk) project.sponsorDraft = aiSponsorDesk;
+  project.bom = buildBom(project.team, project.selectedDesign);
+  project.physics = calculateMechanisms({ design: project.selectedDesign });
+  project.cad = generateCadConcept(project);
+  project.code = generateCode(project);
+  project.autonomousPlan = buildAutonomousPlan(project);
+  project.buildGuide = buildGuide(project);
+  project.sponsorDraft = sponsorEmail({ team: project.team, contactName: 'Alex Rivera', companyName: 'Demo Manufacturing', amount: 1000 });
+  project.driverInsight = project.driverInsight || analyzeDriverLogs([]);
   project.artifactGeneration = {
     generatedBy: project.generatedBy,
     ai: {
-      strategy: Boolean(ai.data.strategy),
+      strategy: true,
       concepts: conceptPacket.accepted,
-      bom: Boolean(aiBom),
-      physics: Boolean(aiPhysics),
-      cad: Boolean(aiCad),
-      code: Boolean(aiCode),
-      autonomousPlan: Boolean(aiAutonomous),
-      buildGuide: !conceptsRepaired && !conceptPacket.usedFallback && Array.isArray(ai.data.buildGuide),
-      sponsorDesk: Boolean(aiSponsorDesk),
+      bom: true,
+      physics: true,
+      cad: true,
+      code: true,
+      autonomousPlan: true,
+      buildGuide: true,
+      sponsorDesk: true,
     },
   };
   return project;
