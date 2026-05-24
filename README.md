@@ -59,7 +59,7 @@ Copy `.env.example` to `.env` when you want to configure the API.
 # Create one at https://aistudio.google.com/app/apikey
 GOOGLE_AI_STUDIO_API_KEY=
 
-GOOGLE_AI_STUDIO_TEXT_MODEL=gemini-2.5-flash-lite
+GOOGLE_AI_STUDIO_TEXT_MODEL=gemini-flash-lite-latest
 GOOGLE_AI_STUDIO_IMAGE_MODEL=gemini-2.5-flash-image
 API_PORT=8787
 ```

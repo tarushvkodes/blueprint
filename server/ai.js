@@ -72,6 +72,7 @@ export function buildGoogleAiStudioRequestBody({
   temperature = 0.35,
   responseSchema = null,
   responseMimeType = 'application/json',
+  maxOutputTokens = null,
 }) {
   const userPrompt = [
     responseMimeType === 'application/json'
@@ -92,6 +93,10 @@ export function buildGoogleAiStudioRequestBody({
 
   if (responseMimeType) {
     body.generationConfig.responseMimeType = responseMimeType;
+  }
+
+  if (maxOutputTokens) {
+    body.generationConfig.maxOutputTokens = maxOutputTokens;
   }
 
   if (systemPrompt) {
@@ -240,6 +245,7 @@ export async function streamGoogleAiStudioText({
     systemPrompt,
     temperature,
     responseMimeType: null,
+    maxOutputTokens: 700,
   });
 
   try {
@@ -260,7 +266,7 @@ export async function streamGoogleAiStudioText({
     let fullText = '';
     for await (const chunk of response.body) {
       buffer += decoder.decode(chunk, { stream: true });
-      const events = buffer.split(/\n\n/);
+      const events = buffer.split(/\r?\n\r?\n/);
       buffer = events.pop() || '';
       for (const event of events) {
         const data = event.split(/\n/).filter((line) => line.startsWith('data:'))
