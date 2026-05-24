@@ -84,6 +84,40 @@ export type Rule = {
   status: string
   confidence: string
   note: string
+  sourceDocument?: string
+  mechanismId?: string | null
+  page?: number | null
+  version?: string | null
+}
+
+export type LegalChecklistItem = {
+  id: string
+  mechanismId?: string | null
+  mechanismName: string
+  concern: string
+  status: string
+  severity: 'info' | 'warning' | 'blocker' | string
+  message: string
+  citation?: {
+    ruleNumber: string
+    manualSection: string
+    page?: number | null
+    sourceDocument: string
+    version?: string | null
+    sourceDate?: string | null
+    explanation: string
+    confidence: string
+  } | null
+}
+
+export type ReviewPass = {
+  pass: boolean
+  checkedAt?: string
+  blockers: string[]
+  warnings: string[]
+  fixes: string[]
+  finalCaveats?: string[]
+  legalChecklist?: LegalChecklistItem[]
 }
 
 export type BomItem = {
@@ -121,6 +155,8 @@ export type ProjectData = {
   artifactUrls?: ArtifactUrls
   concepts: Concept[]
   rules: Rule[]
+  legalChecklist?: LegalChecklistItem[]
+  review?: ReviewPass
   bom: BomItem[]
   physics: PhysicsItem[]
   buildSteps: string[]
@@ -249,6 +285,8 @@ export type ApiProjectResponse = {
   setupValidation?: TeamSetupValidation
   concepts?: ApiConcept[]
   rules?: Rule[]
+  legalChecklist?: LegalChecklistItem[]
+  review?: ReviewPass
   bom?: BomItem[] | {
     required?: ApiBomItem[]
     optional?: ApiBomItem[]

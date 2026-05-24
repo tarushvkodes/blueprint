@@ -530,6 +530,12 @@ export function Workspace({
                   {!!setupValidation.warnings.length && (
                     <small className="setup-warning">{setupValidation.warnings[0]}</small>
                   )}
+                  {project.review && (
+                    <div className={`validation-banner ${project.review.pass ? 'is-ok' : 'has-issues'}`}>
+                      <strong>{project.review.pass ? 'Review pass clear' : `${project.review.blockers.length} review blocker${project.review.blockers.length === 1 ? '' : 's'}`}</strong>
+                      <span>{project.review.blockers[0] || project.review.warnings[0] || 'Artifacts are aligned to the selected mechanism packet.'}</span>
+                    </div>
+                  )}
 
                   <div className="artifact-buttons compact-artifacts">
                     <button type="button" onClick={downloadCode}><Download size={16} /> Code ZIP</button>
@@ -553,6 +559,14 @@ export function Workspace({
               <article className="workspace-card-flat">
                 <h2>Legal/rules checklist</h2>
                 <p>{project.rules[0]?.note || 'Manual citations will appear after ingestion.'}</p>
+                <div className="workspace-list">
+                  {project.rules.slice(0, 4).map((rule, index) => (
+                    <span key={`${rule.mechanismId || rule.rule}-${index}`}>
+                      <CheckCircle2 size={16} />
+                      {rule.rule} · {rule.status}
+                    </span>
+                  ))}
+                </div>
                 <button type="button" onClick={() => setActiveTab('BOM')}>Review supply</button>
               </article>
               <article className="workspace-card-flat">

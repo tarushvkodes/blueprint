@@ -11,12 +11,167 @@ import {
   attachMechanismSpecs,
   getMechanismSpecs,
   mechanismHardwareLines,
+  validateMechanismSpecs,
 } from './mechanisms.js';
 import { validateGeneratedJava } from '../javaValidation.js';
 import { queueProjectSnapshotSave } from '../persistence.js';
 import { state } from '../state.js';
 import { cleanSetupList, sanitizeTeamDraft, validateTeamSetup } from '../teamSetup.js';
 import { nowIso, slugId } from '../utils.js';
+
+const LEGAL_CONCERN_QUERIES = {
+  drivetrain: 'robot construction drivetrain wheels frame perimeter starting configuration',
+  intake: 'robot construction game piece control intake extension entanglement',
+  manipulator: 'robot construction extension size lift arm safety inspection',
+  control: 'control system legal electronics autonomous teleop vision',
+  sensor: 'vision sensor camera control system legal autonomous',
+};
+
+function citationConfidenceScore(citation = {}) {
+  if (!citation || citation.ruleNumber === 'Citation required') return 0;
+  if (citation.confidence === 'High') return 3;
+  if (citation.confidence === 'Medium') return 2;
+  return 1;
+}
+
+function bestCitation(query) {
+  const citations = quoteRule(query);
+  return citations.sort((a, b) => citationConfidenceScore(b) - citationConfidenceScore(a))[0] || null;
+}
+
+export function buildLegalChecklist(project) {
+  const selected = project.selectedDesign || project.concepts?.[1] || project.concepts?.[0];
+  const specs = getMechanismSpecs(selected, project.team, project.season || currentSeasonSource(project));
+  const checklist = specs.map((spec) => {
+    const query = [
+      LEGAL_CONCERN_QUERIES[spec.type] || 'robot inspection legality',
+      spec.name,
+      spec.architecture,
+      ...(spec.risks || []),
+    ].join(' ');
+    const citation = bestCitation(query);
+    const confidenceScore = citationConfidenceScore(citation);
+    return {
+      id: `${spec.id}-legal`,
+      mechanismId: spec.id,
+      mechanismName: spec.name,
+      concern: `${spec.subsystem || spec.type} rules check`,
+      status: confidenceScore >= 2 ? 'citation-available' : 'unresolved',
+      severity: confidenceScore >= 2 ? 'info' : 'blocker',
+      query,
+      citation: citation ? {
+        ruleNumber: citation.ruleNumber,
+        manualSection: citation.manualSection,
+        page: citation.page,
+        sourceDocument: citation.sourceDocument,
+        version: citation.version,
+        sourceDate: citation.sourceDate,
+        explanation: citation.explanation,
+        confidence: citation.confidence,
+      } : null,
+      message: confidenceScore >= 2
+        ? `Review ${citation.ruleNumber} (${citation.manualSection}${citation.page ? `, p. ${citation.page}` : ''}) before build.`
+        : 'No strong indexed citation found. Do not treat this mechanism as rule-cleared until the current official manual is indexed and reviewed.',
+    };
+  });
+
+  const season = project.season || currentSeasonSource(project);
+  if (!season || season.isSample) {
+    checklist.unshift({
+      id: 'current-manual-required',
+      mechanismId: null,
+      mechanismName: 'Season manual',
+      concern: 'Current official season source',
+      status: 'unresolved',
+      severity: 'blocker',
+      query: 'current official FTC season manual version',
+      citation: null,
+      message: 'Upload or ingest the current official manual before relying on rule-sensitive recommendations.',
+    });
+  }
+
+  return checklist;
+}
+
+function collectCodeHardwareNames(code = {}) {
+  const text = Object.values(code || {}).join('\n');
+  return Array.from(text.matchAll(/hardwareMap\.get\([^,]+,\s*"([^"]+)"/g)).map((match) => match[1]);
+}
+
+export function reviewProject(project) {
+  const selected = project.selectedDesign || project.concepts?.[1] || project.concepts?.[0] || {};
+  const specs = getMechanismSpecs(selected, project.team, project.season || currentSeasonSource(project));
+  const mechanismValidation = validateMechanismSpecs(specs);
+  const legalChecklist = buildLegalChecklist(project);
+  const blockers = [];
+  const warnings = [];
+  const fixes = [];
+
+  if (!mechanismValidation.ok) {
+    blockers.push(...mechanismValidation.issues);
+    fixes.push('Repair the selected concept mechanismSpecs before regenerating artifacts.');
+  }
+
+  const missingLegal = legalChecklist.filter((item) => item.severity === 'blocker');
+  if (missingLegal.length) {
+    blockers.push(`${missingLegal.length} legal checklist item(s) need stronger current-manual citations.`);
+    fixes.push('Upload the current official manual or team update source, then regenerate the checklist.');
+  }
+
+  const bomMechanismIds = new Set([...(project.bom?.required || []), ...(project.bom?.optional || [])].flatMap((item) => item.mechanismIds || [item.mechanismId]).filter(Boolean));
+  const physicsMechanismIds = new Set((project.physics || []).map((item) => item.mechanismId).filter(Boolean));
+  const cadMechanismIds = new Set(project.cad?.mechanismIds || []);
+  const buildMechanismIds = new Set((project.buildGuide || []).map((item) => item.mechanismId).filter(Boolean));
+  const requiredSpecIds = specs.filter((spec) => spec.priority === 'required').map((spec) => spec.id);
+
+  for (const id of requiredSpecIds) {
+    if (!bomMechanismIds.has(id)) warnings.push(`${id} has no BOM line tied to its mechanism ID.`);
+    if (!cadMechanismIds.has(id)) warnings.push(`${id} is missing from CAD mechanism IDs.`);
+    if (!buildMechanismIds.has(id)) warnings.push(`${id} is missing from build guide steps.`);
+    const spec = specs.find((item) => item.id === id);
+    if (spec?.validation?.requiresPhysics && !physicsMechanismIds.has(id)) {
+      blockers.push(`${id} requires a physics calculation but none was generated.`);
+      fixes.push('Regenerate physics from the selected mechanism specs.');
+    }
+  }
+
+  const expectedHardwareNames = Array.from(new Set(specs.flatMap((spec) => spec.code?.hardwareNames || [])));
+  const codeHardwareNames = collectCodeHardwareNames(project.code);
+  const missingCodeNames = expectedHardwareNames.filter((name) => !codeHardwareNames.includes(name));
+  if (missingCodeNames.length) {
+    blockers.push(`Generated Java is missing hardware names: ${missingCodeNames.join(', ')}.`);
+    fixes.push('Regenerate code from the selected mechanism specs.');
+  }
+
+  if (project.codeValidation && !project.codeValidation.ok) {
+    blockers.push(...(project.codeValidation.issues || []).map((issue) => `Java validation: ${issue}`));
+    fixes.push('Fix Java validation issues before downloading code for robot use.');
+  }
+
+  if ((project.bom?.budgetRemaining ?? 0) < 0) {
+    warnings.push(`Selected plan is $${Math.abs(project.bom.budgetRemaining).toFixed(0)} over budget before shipping.`);
+    fixes.push('Choose substitutions, mark owned inventory, or select a lower-cost concept.');
+  }
+
+  if (!project.cad?.disclaimer?.toLowerCase().includes('conceptual')) {
+    blockers.push('CAD output is missing conceptual/non-manufacturing disclaimer.');
+    fixes.push('Regenerate CAD with the conceptual starter disclaimer.');
+  }
+
+  return {
+    pass: blockers.length === 0,
+    checkedAt: nowIso(),
+    blockers: Array.from(new Set(blockers)),
+    warnings: Array.from(new Set(warnings)),
+    fixes: Array.from(new Set(fixes)),
+    legalChecklist,
+    finalCaveats: [
+      'Rule-sensitive claims remain unresolved unless tied to current official manual citations.',
+      'CAD artifacts are conceptual starter layouts, not manufacturing-ready exports.',
+      'FTC SDK code must still be compiled and tested inside the team robot project.',
+    ],
+  };
+}
 
 export function persistProjects() {
   return queueProjectSnapshotSave(state.projects);
@@ -223,8 +378,10 @@ export function buildBom(team, conceptOrId = 'balanced-cycle-machine') {
 export function calculateMechanisms({ design = {}, robot = {} } = {}) {
   const specs = getMechanismSpecs(design);
   const drivetrain = specs.find((spec) => spec.type === 'drivetrain');
+  const intake = specs.find((spec) => spec.type === 'intake');
   const manipulator = specs.find((spec) => spec.type === 'manipulator');
   const drivetrainInputs = drivetrain?.physicsInputs || {};
+  const intakeInputs = intake?.physicsInputs || {};
   const manipulatorInputs = manipulator?.physicsInputs || {};
   const wheelDiameter = Number(robot.wheelDiameterMeters || drivetrainInputs.wheelDiameterMeters || 0.096);
   const motorRpm = Number(robot.motorRpm || drivetrainInputs.motorRpm || 312);
@@ -246,6 +403,13 @@ export function calculateMechanisms({ design = {}, robot = {} } = {}) {
   const availableLiftTorque = motorTorque * 20 * efficiency;
   const liftSafetyMargin = availableLiftTorque / recommendedLiftTorque;
   const armTorque = loadMass * 9.81 * armLength;
+  const intakeLoadMass = Number(intakeInputs.loadMassKg || 0.8);
+  const intakeSafetyFactor = Number(intakeInputs.safetyFactor || 1.7);
+  const intakeRollerRadius = Number(intakeInputs.rollerRadiusMeters || 0.025);
+  const intakeSurfaceSpeed = ((motorRpm / 60) * 2 * Math.PI * intakeRollerRadius * efficiency);
+  const servoTorqueNm = 1.8;
+  const intakeRequiredTorque = intakeLoadMass * 9.81 * intakeRollerRadius * intakeSafetyFactor;
+  const intakeMargin = servoTorqueNm / intakeRequiredTorque;
   return [
     {
       mechanismId: drivetrain?.id || 'drivetrain',
@@ -290,6 +454,23 @@ export function calculateMechanisms({ design = {}, robot = {} } = {}) {
       safetyFactor: safetyFactor.toFixed(1),
       recommendation: 'Limit servo travel and avoid hard stops.',
       warning: null,
+    },
+    {
+      mechanismId: intake?.id || 'intake',
+      mechanism: `${intake?.name || 'Intake'} capture margin`,
+      assumptions: {
+        loadMassKg: intakeLoadMass,
+        rollerRadiusMeters: intakeRollerRadius,
+        motorRpm,
+        efficiency,
+        safetyFactor: intakeSafetyFactor,
+      },
+      formula: 'roller_surface_speed = motor_rpm / 60 * 2 * pi * roller_radius * efficiency; torque_margin = servo_torque / (mass * gravity * radius * safety_factor)',
+      calculation: `${motorRpm} rpm, ${intakeRollerRadius} m roller, ${intakeLoadMass} kg game-piece load`,
+      result: `${intakeSurfaceSpeed.toFixed(2)} m/s roller surface speed, ${intakeMargin.toFixed(2)}x servo/roller margin`,
+      safetyFactor: intakeSafetyFactor.toFixed(1),
+      recommendation: intakeMargin > 1.4 ? 'Start with low power and tune compression after jam testing.' : 'Reduce compression or add gearing before match use.',
+      warning: intakeMargin < 1.4 ? 'Low intake margin may stall or overheat during jams.' : null,
     },
   ];
 }
@@ -688,6 +869,8 @@ export async function createProject(body = {}, { transient = false, skipAi = fal
   project.code = generateCode(project);
   project.codeValidation = validateGeneratedJava(project.code);
   project.buildGuide = buildGuide(project);
+  project.legalChecklist = buildLegalChecklist(project);
+  project.review = reviewProject(project);
   project.driverInsight = analyzeDriverLogs([]);
   project.sponsorDraft = sponsorEmail({ team });
   state.projects.set(id, project);
@@ -700,6 +883,8 @@ export function projectForResponse(project) {
   const bomItems = [...(project.bom?.required || []), ...(project.bom?.optional || [])];
   const id = project.id || 'demo';
   const season = project.season || currentSeasonSource(project);
+  const review = project.review || reviewProject(project);
+  const legalChecklist = project.legalChecklist || review.legalChecklist || buildLegalChecklist(project);
   return {
     ...project,
     team: { ...project.team, manual: project.team.manual },
@@ -736,13 +921,18 @@ export function projectForResponse(project) {
       mechanismSpecs: getMechanismSpecs(concept, project.team, project.season || currentSeasonSource(project)),
       risks: concept.risks,
     })),
-    rules: quoteRule('robot construction control system autonomous teleop penalties').map((citation) => ({
-      rule: citation.ruleNumber,
-      section: citation.manualSection,
-      status: citation.confidence === 'Low' ? 'Needs citation verification' : 'Indexed citation available',
-      confidence: citation.confidence,
-      note: citation.explanation,
-      sourceDocument: citation.sourceDocument,
+    legalChecklist,
+    review,
+    rules: legalChecklist.map((item) => ({
+      rule: item.citation?.ruleNumber || 'Citation required',
+      section: item.citation?.manualSection || item.concern,
+      status: item.status === 'citation-available' ? 'Indexed citation available' : 'Needs citation verification',
+      confidence: item.citation?.confidence || 'Low',
+      note: item.message,
+      sourceDocument: item.citation?.sourceDocument || 'Indexed documents',
+      mechanismId: item.mechanismId,
+      page: item.citation?.page,
+      version: item.citation?.version,
     })),
     bom: bomItems.map((item) => ({
       mechanismId: item.mechanismId,

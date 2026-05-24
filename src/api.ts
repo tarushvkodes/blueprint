@@ -142,6 +142,8 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
     artifactUrls: data.artifactUrls ?? previousProject.artifactUrls,
     concepts: concepts.map(normalizeConcept),
     rules: data.rules ?? previousProject.rules,
+    legalChecklist: data.legalChecklist ?? previousProject.legalChecklist,
+    review: data.review ?? previousProject.review,
     bom: normalizeBom(data, previousProject),
     physics: physics.map(normalizePhysicsItem),
     buildSteps: data.buildGuide

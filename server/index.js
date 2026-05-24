@@ -23,6 +23,7 @@ import {
   defaultTeam,
   persistProjects,
   projectForResponse,
+  reviewProject,
   validateProjectSetup,
   sponsorEmail,
 } from './generators/project.js';
@@ -58,6 +59,8 @@ async function refreshDemoProjectWithAi() {
   demoProject.code = generateCode(demoProject);
   demoProject.codeValidation = validateGeneratedJava(demoProject.code);
   demoProject.buildGuide = buildGuide(demoProject);
+  demoProject.legalChecklist = reviewProject(demoProject).legalChecklist;
+  demoProject.review = reviewProject(demoProject);
   demoProject.updatedAt = nowIso();
 }
 
@@ -91,6 +94,7 @@ registerRoutes(app, {
   nowIso,
   persistProjects,
   projectForResponse,
+  reviewProject,
   quoteRule,
   searchCatalog,
   sponsorEmail,

@@ -28,6 +28,7 @@ export function registerRoutes(app, {
   persistProjects,
   projectForResponse,
   quoteRule,
+  reviewProject,
   searchCatalog,
   sponsorEmail,
   state,
@@ -158,6 +159,8 @@ export function registerRoutes(app, {
       project.code = generateCode(project);
       project.codeValidation = validateGeneratedJava(project.code);
       project.buildGuide = project.buildGuide || buildGuide(project);
+      project.legalChecklist = reviewProject(project).legalChecklist;
+      project.review = reviewProject(project);
       project.updatedAt = nowIso();
       persistProjects();
       res.json(projectForResponse(project));
@@ -194,12 +197,15 @@ export function registerRoutes(app, {
         type: req.body.type || 'season-resource',
         sourceUrl: req.file.originalname,
         version: req.body.version || null,
+        sourceDate: req.body.sourceDate || null,
       });
       const project = state.projects.get(req.params.id);
       if (project) {
         project.documents = Array.from(new Set([...(project.documents || []), doc.id]));
         project.season = currentSeasonSource(project);
         project.team.manual = doc.seasonSource?.title || doc.title;
+        project.review = reviewProject(project);
+        project.legalChecklist = project.review.legalChecklist;
         project.updatedAt = nowIso();
         persistProjects();
       }
@@ -264,6 +270,8 @@ export function registerRoutes(app, {
     project.code = generateCode(project);
     project.codeValidation = validateGeneratedJava(project.code);
     project.buildGuide = buildGuide(project);
+    project.legalChecklist = reviewProject(project).legalChecklist;
+    project.review = reviewProject(project);
     project.updatedAt = nowIso();
     persistProjects();
     res.json(projectForResponse(project));
@@ -273,6 +281,8 @@ export function registerRoutes(app, {
     const project = state.projects.get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.bom = buildBom({ ...project.team, ...(req.body.team || {}) }, req.body.designId ? req.body.designId : project.selectedDesign);
+    project.review = reviewProject(project);
+    project.legalChecklist = project.review.legalChecklist;
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.bom);
@@ -282,6 +292,8 @@ export function registerRoutes(app, {
     const project = state.projects.get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.physics = calculateMechanisms(req.body);
+    project.review = reviewProject(project);
+    project.legalChecklist = project.review.legalChecklist;
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.physics);
@@ -297,6 +309,8 @@ export function registerRoutes(app, {
     const project = state.projects.get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.cad = generateCadConcept({ ...project, cadInputs: req.body });
+    project.review = reviewProject(project);
+    project.legalChecklist = project.review.legalChecklist;
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.cad);
@@ -349,6 +363,8 @@ export function registerRoutes(app, {
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.code = generateCode({ ...project, codeInputs: req.body });
     project.codeValidation = validateGeneratedJava(project.code);
+    project.review = reviewProject(project);
+    project.legalChecklist = project.review.legalChecklist;
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.code);
@@ -364,6 +380,8 @@ export function registerRoutes(app, {
     const project = state.projects.get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.codeValidation = validateGeneratedJava(project.code || {});
+    project.review = reviewProject(project);
+    project.legalChecklist = project.review.legalChecklist;
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.codeValidation);
@@ -386,6 +404,8 @@ export function registerRoutes(app, {
     const project = state.projects.get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.buildGuide = buildGuide({ ...project, buildInputs: req.body });
+    project.review = reviewProject(project);
+    project.legalChecklist = project.review.legalChecklist;
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.buildGuide);

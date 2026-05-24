@@ -125,13 +125,18 @@ Why it matters:
 Rule-sensitive answers are the highest-risk part. They must be grounded in current official documents.
 
 Current state:
-PDF upload works. Keyword chunking and basic citations exist. Page/rule preservation is still weak.
+PDF upload works. Ingestion now preserves page-aware chunks from parsed PDFs, carries rule numbers, document version, and upload/source date through searchable chunks, and rule citations now include section/page metadata.
+
+Remaining hardening:
+- Add official FIRST URL ingestion and source-type detection.
+- Improve section heading extraction against real manual fixtures.
+- Show indexed source docs in the UI with version/date and chunk health.
 
 What we need:
-- Better PDF chunking by page and section.
-- Preserve page numbers.
-- Preserve rule numbers.
-- Preserve document version and upload/source date.
+- Better PDF chunking by page and section. Initial page-aware chunking added.
+- Preserve page numbers. Added.
+- Preserve rule numbers. Added.
+- Preserve document version and upload/source date. Added.
 - Support official FIRST URL ingestion.
 - Distinguish manual, team update, Q&A, field drawing, and inspection checklist.
 - Show indexed source docs in the UI.
@@ -142,8 +147,9 @@ Done when:
 - If no citation exists, the app refuses certainty.
 
 Tests:
+- Chunk metadata regression test for rule/page/version/source date. Added.
+- Rule search test with expected rule/page metadata. Added.
 - PDF fixture ingestion test.
-- Rule search test with expected rule/page metadata.
 - Chat test verifies uncited legality claims are not made.
 
 ### 5. Rules-Aware RAG And Legal Checklist
@@ -154,22 +160,27 @@ Why it matters:
 This is the trust layer. It prevents the app from hallucinating robot legality.
 
 Current state:
-Keyword search and citations exist, but no semantic search or conflict detection.
+Keyword search and citations exist, and each selected mechanism now gets a deterministic legal checklist item. Checklist items carry mechanism ID, concern, citation object, confidence, source metadata, and conservative unresolved/blocker status when the indexed manual cannot support the claim. The project review pass consumes the same checklist and blocks final confidence when current-manual citations are missing.
+
+Remaining hardening:
+- Add semantic search through embeddings.
+- Add conflict and outdated-source detection across manuals, team updates, Q&A, and inspection documents.
+- Expand checklist queries with season-specific scoring vocabulary once manual extraction is stronger.
 
 What we need:
-- Citation object with rule number, section, page, source, version/date, explanation, confidence.
-- Rules checklist tied to selected robot concept and mechanisms.
-- Legal concern mapping by drivetrain, extension, control system, vision, game interaction.
+- Citation object with rule number, section, page, source, version/date, explanation, confidence. Added.
+- Rules checklist tied to selected robot concept and mechanisms. Added.
+- Legal concern mapping by drivetrain, extension, control system, vision, game interaction. Initial deterministic mapping added.
 - Conflict/outdated-source warnings.
 - Future semantic search through embeddings.
 
 Done when:
-- Each concept has rule concerns backed by indexed citations or marked unresolved.
-- Legal checklist updates when selected design changes.
+- Each concept has rule concerns backed by indexed citations or marked unresolved. Added.
+- Legal checklist updates when selected design changes. Added.
 
 Tests:
-- Legal checklist integration test.
-- Regression test for no definitive claim when citation confidence is low.
+- Legal checklist integration test. Added.
+- Regression test for no definitive claim when citation confidence is low. Added through review blockers.
 
 ### 6. BOM And Budget Engine
 
@@ -234,7 +245,7 @@ Why it matters:
 Blueprint should show math, not vibes. This is one of the strongest differentiators.
 
 Current state:
-Basic drivetrain, lift, and arm calculations exist with assumptions.
+Drivetrain, lift, arm, and intake/servo calculations exist with assumptions and mechanism IDs.
 
 What we need:
 - Physics generated per mechanism spec.
@@ -242,13 +253,13 @@ What we need:
 - Lift/slide: load, torque, safety margin.
 - Arm: required torque, safety factor.
 - Servo: torque margin.
-- Intake: roller speed.
+- Intake: roller speed. Added.
 - Battery/current warnings.
 - Student-readable assumptions and formulas.
 - Warning thresholds.
 
 Done when:
-- Each motorized mechanism gets at least one calculation.
+- Each motorized mechanism gets at least one calculation. Initial mechanism coverage added for drivetrain, lift/arm, and intake.
 - Low safety margins produce warnings.
 - Physics page traces every number back to a mechanism input.
 
@@ -476,23 +487,28 @@ Why it matters:
 This protects users from bad AI output.
 
 Current state:
-Some gates exist: concept whole-robot validation, Java static validation, CAD disclaimers.
+Review gates now include concept whole-robot validation, Java static validation, CAD disclaimers, mechanism schema validation, legal checklist blockers for missing citations, mechanism ID alignment across BOM/physics/CAD/code/build guide, hardware-name mismatch detection, missing mechanism calculations, and over-budget warnings.
+
+Remaining hardening:
+- Add automatic repair actions for common review failures.
+- Persist review history by project version.
+- Add broader unsafe-build-advice detection as build guide detail increases.
 
 What we need:
-- Central review pass for every generated packet.
-- Block uncited legal claims.
-- Block concept/BOM/physics/code/CAD mismatch.
+- Central review pass for every generated packet. Added.
+- Block uncited legal claims. Added as missing-citation blockers.
+- Block concept/BOM/physics/code/CAD mismatch. Added for mechanism IDs and hardware names.
 - Flag unsafe build advice.
-- Flag over-budget plans.
-- Flag missing mechanism calculations.
-- Store warnings and fixes.
+- Flag over-budget plans. Added as warnings with fixes.
+- Flag missing mechanism calculations. Added.
+- Store warnings and fixes. Added in the project review object.
 
 Done when:
-- Generated project response includes review pass/warnings.
-- UI surfaces blockers before download/build steps.
+- Generated project response includes review pass/warnings. Added.
+- UI surfaces blockers before download/build steps. Added on dashboard/sidebar.
 
 Tests:
-- Review test with intentionally contradictory packet.
+- Review test with intentionally contradictory packet. Added.
 
 ### 18. Persistence And Project Workspace
 
@@ -580,6 +596,6 @@ Do these first:
 4. Make physics consume `MechanismSpec`.
 5. Make CAD consume `MechanismSpec`.
 6. Make code consume `MechanismSpec`.
-7. Add Review Agent blockers for missing or contradictory mechanisms.
+7. Add Review Agent blockers for missing or contradictory mechanisms. Initial pass added.
 
 That is the shortest path from "cool prototype" to "credible MVP."

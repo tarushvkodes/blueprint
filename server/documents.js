@@ -6,53 +6,99 @@ import { defaultFiles } from './config.js';
 import { state } from './state.js';
 import { firstMatch, normalizeWhitespace, nowIso, scoreText, slugId, snippetAround } from './utils.js';
 
-function chunkText(text, { documentId, title, sourceUrl, type, version, pageSize = 1200 }) {
+const rulePatterns = [
+  /\b[A-Z]{1,3}\d{2,4}[A-Z]?\b/,
+  /<([A-Z]{1,3}\d{2,4}[A-Z]?)>/,
+];
+
+function inferRuleNumber(text) {
+  const source = String(text || '');
+  for (const pattern of rulePatterns) {
+    const match = source.match(pattern);
+    if (match) return match[1] || match[0];
+  }
+  return null;
+}
+
+function inferSection(paragraph, fallback) {
+  const normalized = normalizeWhitespace(paragraph);
+  const maybeNumbered = normalized.match(/^(\d+(?:\.\d+){0,4}\s+[A-Z][A-Za-z0-9 /&().:'-]{3,90})/);
+  if (maybeNumbered) return maybeNumbered[1];
+  if (/[.!?]$/.test(normalized)) return fallback;
+  const maybeNamed = normalized.match(/^([A-Z][A-Za-z0-9 /&():'-]{4,90})$/);
+  return maybeNamed ? maybeNamed[1] : fallback;
+}
+
+function makeChunk({ documentId, title, sourceUrl, type, version, sourceDate, section, page, text }) {
+  return {
+    id: slugId('chunk'),
+    documentId,
+    title,
+    sourceUrl,
+    type,
+    version,
+    sourceDate,
+    section,
+    page,
+    ruleNumber: inferRuleNumber(text),
+    text: text.trim(),
+  };
+}
+
+export function chunkText(text, { documentId, title, sourceUrl, type, version, sourceDate = null, page = null, pageSize = 1200 }) {
   const chunks = [];
   const paragraphs = String(text || '').split(/\n\s*\n/g).map(normalizeWhitespace).filter(Boolean);
   let buffer = '';
   let section = title;
   for (const paragraph of paragraphs) {
-    const maybeSection = paragraph.match(/^([A-Z][A-Za-z0-9 /&().:-]{4,90})$/);
-    if (maybeSection) section = maybeSection[1];
+    section = inferSection(paragraph, section);
     if ((buffer + paragraph).length > pageSize && buffer) {
-      chunks.push({
-        id: slugId('chunk'),
+      chunks.push(makeChunk({
         documentId,
         title,
         sourceUrl,
         type,
         version,
+        sourceDate,
         section,
-        page: null,
-        ruleNumber: (buffer.match(/\bR\d{3}\b/) || [null])[0],
+        page,
         text: buffer.trim(),
-      });
+      }));
       buffer = '';
     }
     buffer += `${paragraph}\n\n`;
   }
   if (buffer.trim()) {
-    chunks.push({
-      id: slugId('chunk'),
+    chunks.push(makeChunk({
       documentId,
       title,
       sourceUrl,
       type,
       version,
+      sourceDate,
       section,
-      page: null,
-      ruleNumber: (buffer.match(/\bR\d{3}\b/) || [null])[0],
+      page,
       text: buffer.trim(),
-    });
+    }));
   }
   return chunks;
+}
+
+function chunkDocumentText(text, options) {
+  if (Array.isArray(options.pagesText) && options.pagesText.length) {
+    return options.pagesText.flatMap((page) => chunkText(page.text, { ...options, page: page.page }));
+  }
+  return chunkText(text, options);
 }
 
 async function parsePdf(filePath) {
   const parser = new PDFParse({ url: filePath });
   try {
     const result = await parser.getText();
-    return { text: result.text || '', pages: result.total || result.numpages || null };
+    const pagesText = Array.isArray(result.pages)
+      ? result.pages.map((page) => ({ page: page.num, text: page.text || '' })).filter((page) => page.text.trim())
+      : [];
+    return { text: result.text || '', pages: result.total || result.numpages || null, pagesText };
   } finally {
     await parser.destroy();
   }
@@ -105,15 +151,19 @@ function extractSeasonSourcePack({ text, title, type, version, pages, sourceUrl 
   };
 }
 
-export async function ingestDocument({ filePath, title, type, sourceUrl = filePath, version = null }) {
+export async function ingestDocument({ filePath, title, type, sourceUrl = filePath, version = null, sourceDate = null }) {
   const stat = await fsp.stat(filePath);
+  const ingestedAt = nowIso();
+  const effectiveSourceDate = sourceDate || ingestedAt;
   const ext = path.extname(filePath).toLowerCase();
   let text = '';
   let pages = null;
+  let pagesText = [];
   if (ext === '.pdf') {
     const parsed = await parsePdf(filePath);
     text = parsed.text;
     pages = parsed.pages;
+    pagesText = parsed.pagesText;
   } else if (type === 'cad' || stat.size > 5_000_000) {
     const handle = await fsp.open(filePath, 'r');
     try {
@@ -140,9 +190,10 @@ export async function ingestDocument({ filePath, title, type, sourceUrl = filePa
     type,
     sourceUrl,
     version,
+    sourceDate: effectiveSourceDate,
     pages,
     checksum: `${stat.size}-${Math.round(stat.mtimeMs)}`,
-    ingestedAt: nowIso(),
+    ingestedAt,
     summary: normalizeWhitespace(text).slice(0, 900),
     seasonSource: type === 'manual' || type === 'season-resource'
       ? extractSeasonSourcePack({ text, title, type, version, pages, sourceUrl })
@@ -150,7 +201,7 @@ export async function ingestDocument({ filePath, title, type, sourceUrl = filePa
   };
   state.documents.set(id, doc);
   state.chunks = state.chunks.filter((chunk) => chunk.documentId !== id);
-  state.chunks.push(...chunkText(text, { documentId: id, title, sourceUrl, type, version }));
+  state.chunks.push(...chunkDocumentText(text, { documentId: id, title, sourceUrl, type, version, sourceDate: effectiveSourceDate, pagesText }));
   return doc;
 }
 
@@ -182,8 +233,10 @@ export function quoteRule(query, { preferManual = true } = {}) {
     .map(({ chunk }) => ({
       ruleNumber: chunk.ruleNumber || 'Unnumbered',
       manualSection: chunk.section || chunk.title,
+      page: chunk.page,
       sourceDocument: chunk.title,
       version: chunk.version,
+      sourceDate: chunk.sourceDate,
       sourceUrl: chunk.sourceUrl,
       explanation: normalizeWhitespace(chunk.text).slice(0, 260),
       confidence: chunk.ruleNumber ? 'Medium' : 'Low',
