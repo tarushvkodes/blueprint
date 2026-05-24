@@ -31,7 +31,7 @@ const downloadsDir = path.join(process.env.USERPROFILE || process.env.HOME || ro
 export const googleAiStudioConfig = {
   apiKey: process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GEMINI_API_KEY || '',
   forceFallback: process.env.BLUEPRINT_FORCE_LOCAL_FALLBACK === '1',
-  textModel: process.env.GOOGLE_AI_STUDIO_TEXT_MODEL || process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash-lite',
+  textModel: process.env.GOOGLE_AI_STUDIO_TEXT_MODEL || process.env.GEMINI_TEXT_MODEL || 'gemini-flash-lite-latest',
   imageModel: process.env.GOOGLE_AI_STUDIO_IMAGE_MODEL || process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image',
   timeoutMs: Number(process.env.GOOGLE_AI_STUDIO_TIMEOUT_MS || process.env.GEMINI_TIMEOUT_MS || 45000),
 };
