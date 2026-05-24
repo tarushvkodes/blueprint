@@ -32,6 +32,26 @@ export function generateCadConcept(project) {
       material: 'wheel',
     });
   });
+  const viewComponents = components.map((component) => ({
+    id: component.id,
+    mechanismId: component.mechanismId,
+    label: component.name,
+    positionMm: component.positionMm,
+    sizeMm: component.sizeMm,
+  }));
+  const wiringRuns = [
+    { id: 'battery-to-switch', from: 'battery', to: 'power-switch', pathMm: [{ x: 120, y: 125, z: 120 }, { x: 0, y: 135, z: 120 }], note: 'Keep main power switch reachable from outside the robot.' },
+    { id: 'switch-to-hub', from: 'power-switch', to: 'control-hub', pathMm: [{ x: 0, y: 135, z: 120 }, { x: -120, y: 115, z: 125 }], note: 'Strain-relieve XT30 leads and keep them away from lift travel.' },
+    { id: 'hub-to-drive', from: 'control-hub', to: 'drive-motors', pathMm: [{ x: -120, y: 115, z: 125 }, { x: -180, y: 0, z: 75 }, { x: 180, y: 0, z: 75 }], note: 'Label every motor cable with the generated hardware name.' },
+    { id: 'hub-to-intake', from: 'control-hub', to: 'intake', pathMm: [{ x: -120, y: 115, z: 125 }, { x: 0, y: -165, z: 125 }], note: 'Leave service loop so the intake can be removed.' },
+    { id: 'hub-to-lift', from: 'control-hub', to: 'lift-tower', pathMm: [{ x: -120, y: 115, z: 125 }, { x: 55, y: 0, z: 250 }], note: 'Route through a strain-relieved cable chain or tied bundle.' },
+  ];
+  const explodedSteps = [
+    { order: 1, componentIds: ['base-frame', 'wheel-1', 'wheel-2', 'wheel-3', 'wheel-4'], offsetMm: { x: 0, y: 0, z: 0 }, instruction: 'Build and square drivetrain before adding vertical mechanisms.' },
+    { order: 2, componentIds: ['control-hub', 'battery'], offsetMm: { x: 0, y: 80, z: 45 }, instruction: 'Mount low electronics bay with battery access and strain relief.' },
+    { order: 3, componentIds: ['lift-tower'], offsetMm: { x: 0, y: 0, z: 120 }, instruction: 'Brace scoring tower back into drivetrain rails before powered tests.' },
+    { order: 4, componentIds: ['intake'], offsetMm: { x: 0, y: -120, z: 35 }, instruction: 'Attach intake as a removable front module with visible jam access.' },
+  ];
 
   return {
     disclaimer: 'Conceptual CAD starter. Verify dimensions, clearances, fasteners, and legality before manufacturing.',
@@ -55,7 +75,69 @@ export function generateCadConcept(project) {
         { id: 'hub-mount', componentId: 'control-hub', note: 'Mount with service access and strain relief.' },
         { id: 'battery-strap', componentId: 'battery', note: 'Battery must be secure and reachable for inspection.' },
         { id: 'tower-brace', componentId: 'lift-tower', note: 'Brace tower to base frame before lift testing.' },
+        { id: 'intake-service-fasteners', componentId: 'intake', note: 'Use two accessible fastener groups so students can remove the intake quickly.' },
       ],
+    },
+    blueprintViews: {
+      top: {
+        projection: 'XY',
+        scale: '1 mm = 1 layout unit',
+        callouts: ['starting frame perimeter', 'wheel handedness', 'electronics service bay', 'front intake envelope'],
+        components: viewComponents.map((component) => ({
+          ...component,
+          drawing: {
+            x: component.positionMm.x,
+            y: component.positionMm.y,
+            width: component.sizeMm.x || (component.sizeMm.radius || 20) * 2,
+            height: component.sizeMm.y || component.sizeMm.depth || (component.sizeMm.radius || 20) * 2,
+          },
+        })),
+      },
+      front: {
+        projection: 'XZ',
+        callouts: ['lift height envelope', 'intake vertical clearance', 'wheel contact line'],
+        components: viewComponents.map((component) => ({
+          ...component,
+          drawing: {
+            x: component.positionMm.x,
+            y: component.positionMm.z,
+            width: component.sizeMm.x || (component.sizeMm.radius || 20) * 2,
+            height: component.sizeMm.z || component.sizeMm.depth || (component.sizeMm.radius || 20) * 2,
+          },
+        })),
+      },
+      side: {
+        projection: 'YZ',
+        callouts: ['center of gravity stays low', 'battery access', 'cable path through lift travel'],
+        components: viewComponents.map((component) => ({
+          ...component,
+          drawing: {
+            x: component.positionMm.y,
+            y: component.positionMm.z,
+            width: component.sizeMm.y || component.sizeMm.depth || (component.sizeMm.radius || 20) * 2,
+            height: component.sizeMm.z || component.sizeMm.x || (component.sizeMm.radius || 20) * 2,
+          },
+        })),
+      },
+      isometric: {
+        projection: 'conceptual 3D',
+        camera: { positionMm: { x: 720, y: -760, z: 560 }, targetMm: { x: 0, y: 0, z: 170 } },
+        callouts: ['concept only', 'verify dimensions and fasteners', 'export richer geometry later through CadQuery/OpenCascade'],
+      },
+    },
+    wiringView: {
+      disclaimer: 'Conceptual wiring route. Verify wire gauge, strain relief, legal control system layout, and inspection requirements.',
+      runs: wiringRuns,
+      checklist: [
+        'Battery is strapped and reachable.',
+        'Power switch is externally reachable.',
+        'Motor and sensor wires are labeled with generated hardware names.',
+        'No wire crosses wheel, intake, or lift pinch paths.',
+      ],
+    },
+    explodedAssembly: {
+      disclaimer: 'Exploded view shows build order, not final manufacturing geometry.',
+      steps: explodedSteps,
     },
     subsystemLayout: [
       { name: 'Drivetrain', placement: 'base rectangle, motors inside frame perimeter', dimensionsMm: { x: 455, y: 455, z: 90 } },
@@ -99,6 +181,9 @@ export function cadAsConceptJson(project) {
       robotDimensionsMm: cad.robotDimensionsMm,
       mechanismIds: cad.mechanismIds || [],
       mechanismSpecs: cad.mechanismSpecs || [],
+      blueprintViews: cad.blueprintViews || {},
+      wiringView: cad.wiringView || {},
+      explodedAssembly: cad.explodedAssembly || {},
       note: 'This MVP concept artifact stores parametric CAD components for browser/tool import. Mesh export can be swapped for a full glTF pipeline later.',
     },
   };

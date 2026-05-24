@@ -1,4 +1,4 @@
-export const workspaceTabs = ['Dashboard', 'Overview', 'Strategy', 'Design', 'BOM', 'Physics', 'CAD', 'Code', 'Build', 'Chat'] as const
+export const workspaceTabs = ['Dashboard', 'Overview', 'Strategy', 'Design', 'BOM', 'Physics', 'CAD', 'Code', 'Autonomous', 'Build', 'Driver Logs', 'Grants', 'Chat'] as const
 
 export type WorkspaceTab = (typeof workspaceTabs)[number]
 
@@ -23,6 +23,13 @@ export type Team = {
   cadExperience?: string
   programmingExperience?: string
   buildSpace?: string
+  bomOverrides?: Record<string, BomOverride>
+}
+
+export type BomOverride = {
+  qty?: number
+  price?: number
+  note?: string
 }
 
 export type Concept = {
@@ -128,8 +135,50 @@ export type BomItem = {
   sku: string
   part: string
   qty: number
+  ownedQty?: number
+  missingQty?: number
   price: number
+  total?: number
+  missingTotal?: number
+  budgetCategory?: string
   stock: string
+  productUrl?: string | null
+  lastChecked?: string | null
+  substitutionSuggestions?: BomSubstitution[]
+  overrideNote?: string | null
+  overridden?: boolean
+}
+
+export type BomSubstitution = {
+  label: string
+  impact: string
+  query?: string | null
+  sku?: string
+  part?: string
+  mechanismIds?: string[]
+}
+
+export type BomSubsystemTotal = {
+  subsystem: string
+  total: number
+  requiredTotal: number
+  optionalTotal: number
+  missingTotal: number
+}
+
+export type BomSummary = {
+  conceptId?: string
+  conceptName?: string
+  subtotal: number
+  missingSubtotal: number
+  ownedValue: number
+  shippingEstimatePlaceholder: number
+  estimatedCheckoutTotal: number
+  budgetRemaining: number
+  budgetMode: string
+  subsystemTotals: BomSubsystemTotal[]
+  buyFirst: BomItem[]
+  substitutions: BomSubstitution[]
 }
 
 export type PhysicsItem = {
@@ -153,18 +202,127 @@ export type ProjectData = {
   aiStatus?: AiStatus
   sourceDocuments?: SourceDocument[]
   artifactUrls?: ArtifactUrls
+  strategy?: StrategyPlan | null
   concepts: Concept[]
   rules: Rule[]
   legalChecklist?: LegalChecklistItem[]
   review?: ReviewPass
   bom: BomItem[]
+  bomSummary?: BomSummary | null
+  bomOverrides?: Record<string, BomOverride>
   physics: PhysicsItem[]
   buildSteps: string[]
   buildGuide?: BuildGuideStep[]
   codeFiles: string[]
   codeValidation?: CodeValidation
+  autonomousPlan?: AutonomousPlan | null
   driverInsight: string
+  driverAnalysis?: DriverAnalysis | null
   sponsorDraft: string
+  sponsorDesk?: SponsorDesk | null
+}
+
+export type StrategyPlan = {
+  recommendation: string
+  scoringPriorities: string[]
+  whatToIgnore: string[]
+  autonomous: string[]
+  teleOp: string[]
+  endgame: string[]
+  driverPracticeGoals: string[]
+  allianceCompatibility: string
+  citations?: {
+    ruleNumber: string
+    manualSection: string
+    page?: number | null
+    sourceDocument: string
+    version?: string | null
+    explanation: string
+    confidence: string
+  }[]
+  generatedBy?: string
+}
+
+export type AutonomousPlan = {
+  drivetrain: string
+  reliability: string
+  startPosition: string
+  alliance: string
+  desiredAction: string
+  sensors: string[]
+  path: {
+    order: number
+    action: string
+    distanceMm?: number
+    headingDeg?: number
+    durationMs?: number
+    fallback?: string
+  }[]
+  pseudocode: string[]
+  tuningConstants: Record<string, string | number>
+  testingPlan: string[]
+  warnings: string[]
+}
+
+export type ProjectSummary = {
+  id: string
+  status?: string
+  createdAt?: string
+  updatedAt?: string
+  team: Pick<Team, 'name' | 'number' | 'budget' | 'experience'>
+  season: string
+  selectedDesign?: string | null
+  generatedBy?: string
+  setupValidation?: TeamSetupValidation | null
+}
+
+export type DriverAnalysis = {
+  eventCount: number
+  buttonUsage: {
+    button: string
+    count: number
+  }[]
+  repeatedSequences?: {
+    sequence: string[]
+    count: number
+    recommendation: string
+  }[]
+  timingGaps?: {
+    averageSeconds: number
+    p90Seconds: number
+    maxSeconds: number
+  }
+  phaseBreakdown?: {
+    phase: string
+    count: number
+  }[]
+  heatmap?: {
+    control: string
+    intensity: number
+    driver: string
+  }[]
+  suggestions: string[]
+  recommendedMap: {
+    driver1?: Record<string, string>
+    driver2?: Record<string, string>
+  }
+}
+
+export type SponsorDesk = {
+  subject: string
+  body?: string
+  tiers?: {
+    amount: number
+    benefit: string
+  }[]
+}
+
+export type ChatSuggestion = {
+  id: string
+  label: string
+  description: string
+  action: 'set-goal' | 'add-priority' | 'regenerate-bom' | 'regenerate-autonomous' | 'open-tab'
+  payload?: Record<string, string | number | boolean | string[] | null>
 }
 
 export type TeamSetupCheck = {
@@ -188,12 +346,23 @@ export type TeamSetupValidation = {
 export type AiStatus = {
   ready: boolean
   provider: string
+  configured?: {
+    forceFallback: boolean
+    expressApiKey: boolean
+    applicationDefaultCredentials: boolean
+  }
+  credentialsMode?: string
   textModel: string
   imageModel: string
   projectId?: string | null
   location?: string | null
   message: string
   lastError?: string | null
+  lastOkAt?: string | null
+  lastProvider?: string | null
+  lastLatencyMs?: number | null
+  lastSmokeTestAt?: string | null
+  smokeTestRecommended?: boolean
 }
 
 export type SeasonSource = {
@@ -214,9 +383,21 @@ export type SourceDocument = {
   title: string
   type: string
   version?: string | null
+  sourceDate?: string | null
+  sourceUrl?: string | null
   pages?: number | null
   ingestedAt?: string
   seasonSource?: SeasonSource | null
+  health?: {
+    chunkCount: number
+    ruleCount: number
+    hasPageNumbers: boolean
+    officialSource: boolean
+    hasVersionConflict: boolean
+    sourceAgeDays?: number | null
+    status: string
+    warnings: string[]
+  }
 }
 
 export type ArtifactUrls = {
@@ -249,6 +430,7 @@ export type BuildGuideStep = {
   time?: string
   diagram?: string
   instructions: string
+  safetyWarning?: string
   checkpoint?: string
   commonMistake?: string
   test?: string
@@ -291,22 +473,28 @@ export type ApiProjectResponse = {
     required?: ApiBomItem[]
     optional?: ApiBomItem[]
   }
+  bomSummary?: BomSummary | null
+  bomOverrides?: Record<string, BomOverride>
   physics?: ApiPhysicsItem[]
   buildGuide?: ApiBuildStep[]
   buildSteps?: string[]
   code?: Record<string, string>
   codeFiles?: string[]
   codeValidation?: CodeValidation
+  autonomousPlan?: AutonomousPlan | null
   season?: SeasonSource
   generatedBy?: string
   aiFallbackReason?: string | null
   aiStatus?: AiStatus
   sourceDocuments?: SourceDocument[]
   artifactUrls?: ArtifactUrls
+  strategy?: StrategyPlan | null
   driverInsight?: string | {
     suggestions?: string[]
   }
+  driverAnalysis?: DriverAnalysis | null
   sponsorDraft?: string | {
     subject?: string
   }
+  sponsorDesk?: SponsorDesk | null
 }

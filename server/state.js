@@ -5,5 +5,9 @@ export const state = {
   catalog: new Map(),
   ai: {
     lastError: null,
+    lastOkAt: null,
+    lastProvider: null,
+    lastLatencyMs: null,
+    lastSmokeTestAt: null,
   },
 };

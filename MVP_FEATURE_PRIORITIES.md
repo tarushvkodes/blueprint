@@ -190,16 +190,21 @@ Why it matters:
 The BOM must be believable and mechanically tied to the robot. If it is generic, the whole app feels hardcoded.
 
 Current state:
-REV catalog scraping exists. BOM still uses simple mechanism keywords and starter assumptions.
+Implementation pass is complete. BOM generation now consumes `MechanismSpec` hardware lines, merges duplicate requirements, tracks mechanism IDs per line, accounts for owned vs missing quantities from inventory, computes checkout subtotal after owned inventory, groups cost by subsystem, ranks buy-first items, and emits substitution suggestions for advanced/optional cost drivers.
+
+Remaining hardening:
+- Add editable manual overrides for quantity, price, and substitutions in the UI.
+- Add richer SKU/category matching from expanded REV catalog data.
+- Add fixture-backed parser tests for real catalog product pages.
 
 What we need:
-- BOM generated from `MechanismSpec`.
-- Required, optional, spares, already-owned, missing.
-- Buy-first ranking.
-- Budget modes: ultra-low, balanced, competitive.
-- Substitution suggestions.
+- BOM generated from `MechanismSpec`. Added.
+- Required, optional, spares, already-owned, missing. Added with owned/missing quantities.
+- Buy-first ranking. Added.
+- Budget modes: ultra-low, balanced, competitive. Added.
+- Substitution suggestions. Initial mechanism-aware suggestions added.
 - Manual overrides for price, quantity, and inventory.
-- Cost by subsystem.
+- Cost by subsystem. Added.
 
 Done when:
 - Changing selected design changes BOM because mechanism specs changed.

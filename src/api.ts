@@ -8,8 +8,10 @@ import type {
   Concept,
   PhysicsItem,
   ProjectData,
+  ProjectSummary,
   Team,
   AiStatus,
+  ChatSuggestion,
   TeamSetupValidation,
 } from './types'
 
@@ -77,8 +79,18 @@ function normalizeBomItem(item: ApiBomItem | BomItem): BomItem {
     sku: item.sku,
     part: item.part,
     qty: Number.isFinite(qty) ? qty : 0,
+    ownedQty: item.ownedQty,
+    missingQty: item.missingQty,
     price: Number.isFinite(price) ? price : 0,
+    total: item.total,
+    missingTotal: item.missingTotal,
+    budgetCategory: item.budgetCategory,
     stock: item.stock,
+    productUrl: item.productUrl,
+    lastChecked: item.lastChecked,
+    substitutionSuggestions: item.substitutionSuggestions,
+    overrideNote: item.overrideNote,
+    overridden: item.overridden,
   }
 }
 
@@ -140,11 +152,14 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
     aiStatus: data.aiStatus ?? previousProject.aiStatus,
     sourceDocuments: data.sourceDocuments ?? previousProject.sourceDocuments,
     artifactUrls: data.artifactUrls ?? previousProject.artifactUrls,
+    strategy: data.strategy ?? previousProject.strategy,
     concepts: concepts.map(normalizeConcept),
     rules: data.rules ?? previousProject.rules,
     legalChecklist: data.legalChecklist ?? previousProject.legalChecklist,
     review: data.review ?? previousProject.review,
     bom: normalizeBom(data, previousProject),
+    bomSummary: data.bomSummary ?? previousProject.bomSummary,
+    bomOverrides: data.bomOverrides ?? previousProject.bomOverrides,
     physics: physics.map(normalizePhysicsItem),
     buildSteps: data.buildGuide
       ? data.buildGuide.map((step) => `${step.phase}: ${step.instructions}`)
@@ -152,8 +167,11 @@ export function normalizeProjectResponse(data: ApiProjectResponse, previousProje
     buildGuide: data.buildGuide ?? previousProject.buildGuide,
     codeFiles: data.code ? Object.keys(data.code) : data.codeFiles ?? previousProject.codeFiles,
     codeValidation: data.codeValidation ?? previousProject.codeValidation,
+    autonomousPlan: data.autonomousPlan ?? previousProject.autonomousPlan,
     driverInsight: normalizeDriverInsight(data.driverInsight, previousProject.driverInsight),
+    driverAnalysis: data.driverAnalysis ?? previousProject.driverAnalysis,
     sponsorDraft: normalizeSponsorDraft(data.sponsorDraft, previousProject.sponsorDraft),
+    sponsorDesk: data.sponsorDesk ?? previousProject.sponsorDesk,
   }
 }
 
@@ -172,11 +190,27 @@ export function fetchAiStatus() {
   return requestJson<AiStatus>('/ai/status')
 }
 
+export async function listProjects() {
+  const data = await requestJson<{ projects?: ProjectSummary[] }>('/projects')
+
+  return data.projects ?? []
+}
+
 export async function regenerateProjectFromTeam(team: Team, previousProject: ProjectData) {
   const data = await requestJson<ApiProjectResponse>('/projects', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ team }),
+  })
+
+  return normalizeProjectResponse(data, previousProject)
+}
+
+export async function startDemoRun(previousProject: ProjectData) {
+  const data = await requestJson<ApiProjectResponse>('/projects/demo-run', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
   })
 
   return normalizeProjectResponse(data, previousProject)
@@ -238,7 +272,7 @@ export async function syncRevCatalog() {
 }
 
 export async function askBlueprintQuestion(projectId: string, previousProject: ProjectData, message = defaultBlueprintQuestion) {
-  const data = await requestJson<{ answer?: string; project?: ApiProjectResponse }>(`/projects/${projectId}/chat`, {
+  const data = await requestJson<{ answer?: string; project?: ApiProjectResponse; suggestedActions?: (string | ChatSuggestion)[] }>(`/projects/${projectId}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ message }),
@@ -247,17 +281,78 @@ export async function askBlueprintQuestion(projectId: string, previousProject: P
   return {
     answer: data.answer ?? 'Blueprint returned no answer.',
     project: data.project ? normalizeProjectResponse(data.project, previousProject) : null,
+    suggestedActions: (data.suggestedActions ?? []).map((action, index) => (
+      typeof action === 'string'
+        ? { id: `legacy-${index}`, label: action, description: action, action: 'open-tab' as const, payload: { tab: action } }
+        : action
+    )),
+  }
+}
+
+export async function applyChatSuggestion(projectId: string, suggestion: ChatSuggestion, previousProject: ProjectData) {
+  const data = await requestJson<{ project?: ApiProjectResponse; applied?: boolean; message?: string }>(`/projects/${projectId}/chat/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ suggestion }),
+  })
+
+  return {
+    applied: data.applied ?? false,
+    message: data.message ?? 'Suggestion applied.',
+    project: data.project ? normalizeProjectResponse(data.project, previousProject) : null,
   }
 }
 
 export async function analyzeDriverLogText(projectId: string, text: string) {
-  const data = await requestJson<{ suggestions?: string[] }>(`/projects/${projectId}/driver-logs/analyze`, {
+  const data = await requestJson<{
+    eventCount?: number
+    buttonUsage?: { button: string, count: number }[]
+    repeatedSequences?: { sequence: string[], count: number, recommendation: string }[]
+    timingGaps?: { averageSeconds: number, p90Seconds: number, maxSeconds: number }
+    phaseBreakdown?: { phase: string, count: number }[]
+    heatmap?: { control: string, intensity: number, driver: string }[]
+    suggestions?: string[]
+    recommendedMap?: {
+      driver1?: Record<string, string>
+      driver2?: Record<string, string>
+    }
+  }>(`/projects/${projectId}/driver-logs/analyze`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ csv: text }),
   })
 
-  return data.suggestions?.join(' ') ?? 'Driver log analyzed, but no suggestions were returned.'
+  return {
+    eventCount: data.eventCount ?? 0,
+    buttonUsage: data.buttonUsage ?? [],
+    repeatedSequences: data.repeatedSequences ?? [],
+    timingGaps: data.timingGaps,
+    phaseBreakdown: data.phaseBreakdown ?? [],
+    heatmap: data.heatmap ?? [],
+    suggestions: data.suggestions ?? [],
+    recommendedMap: data.recommendedMap ?? {},
+  }
+}
+
+export async function ingestSeasonUrl(projectId: string, url: string, previousProject: ProjectData) {
+  const data = await requestJson<{ project?: ApiProjectResponse }>(`/projects/${projectId}/documents/ingest-url`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+
+  if (!data.project) return previousProject
+  return normalizeProjectResponse(data.project, previousProject)
+}
+
+export async function updateBomOverride(projectId: string, key: string, override: { qty?: number, price?: number, note?: string }, previousProject: ProjectData) {
+  const data = await requestJson<ApiProjectResponse>(`/projects/${projectId}/bom/overrides`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ key, override }),
+  })
+
+  return normalizeProjectResponse(data, previousProject)
 }
 
 export function projectCodeExportUrl(projectId: string) {

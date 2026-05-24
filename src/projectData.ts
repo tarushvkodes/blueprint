@@ -62,6 +62,18 @@ export const fallbackProject: ProjectData = {
   setupValidation: undefined,
   sourceDocuments: [],
   artifactUrls: {},
+  strategy: {
+    recommendation: 'Build a reliable drivetrain and one repeatable scoring path before adding complexity.',
+    scoringPriorities: ['repeatable teleop scoring', 'reliable autonomous movement', 'low penalty exposure'],
+    whatToIgnore: ['fragile mechanisms until the first scoring loop works'],
+    autonomous: ['drive/park reliably', 'add preload scoring only after repeatability'],
+    teleOp: ['driver 1 owns drivetrain', 'driver 2 owns scoring', 'slow mode for alignment'],
+    endgame: ['attempt only if build time remains'],
+    driverPracticeGoals: ['five clean cycles in a row', 'consistent button sequence under time pressure'],
+    allianceCompatibility: 'Prefer a robot that can avoid traffic and help partners score.',
+    citations: [],
+    generatedBy: 'local-fallback',
+  },
   concepts: [
     {
       name: 'Reliable Decode Scorer',
@@ -93,6 +105,8 @@ export const fallbackProject: ProjectData = {
   ],
   rules: [],
   bom: [],
+  bomSummary: null,
+  bomOverrides: {},
   physics: [],
   buildSteps: [],
   codeFiles: [],
@@ -101,8 +115,46 @@ export const fallbackProject: ProjectData = {
     issues: ['No live generated code loaded yet.'],
     warnings: [],
   },
+  autonomousPlan: {
+    drivetrain: 'mecanum',
+    reliability: 'high reliability',
+    startPosition: 'audience-side tile',
+    alliance: 'configurable red or blue',
+    desiredAction: 'score preload then park',
+    sensors: ['drive encoders'],
+    path: [
+      { order: 1, action: 'Reset encoders and close intake gate', durationMs: 250 },
+      { order: 2, action: 'Drive off start line', distanceMm: 610, headingDeg: 0 },
+      { order: 3, action: 'Park in the safest available zone', distanceMm: 420, headingDeg: 0 },
+    ],
+    pseudocode: ['initialize hardware', 'reset encoders', 'drive path', 'stop all motors'],
+    tuningConstants: { wheelDiameterMm: 96, gearRatio: 1, drivePower: 0.35 },
+    testingPlan: ['Run each step alone.', 'Run 10 full trials and keep the simplest reliable path.'],
+    warnings: ['Retune if battery, wheels, gearing, traction, or robot weight changes.'],
+  },
   driverInsight: 'Upload CSV or JSON gamepad logs to generate control remaps and macro suggestions.',
+  driverAnalysis: {
+    eventCount: 0,
+    buttonUsage: [],
+    repeatedSequences: [],
+    phaseBreakdown: [],
+    heatmap: [],
+    timingGaps: { averageSeconds: 0, p90Seconds: 0, maxSeconds: 0 },
+    suggestions: ['Upload CSV or JSON gamepad logs to generate control remaps and macro suggestions.'],
+    recommendedMap: {
+      driver1: { leftStick: 'drive/strafe', rightStickX: 'turn', leftBumper: 'slow mode' },
+      driver2: { a: 'intake close', b: 'intake open', y: 'high preset' },
+    },
+  },
   sponsorDraft: 'Subject: Supporting local FTC students building an engineering robot',
+  sponsorDesk: {
+    subject: 'Subject: Supporting local FTC students building an engineering robot',
+    tiers: [
+      { amount: 250, benefit: 'Team website and social recognition' },
+      { amount: 500, benefit: 'Logo on pit display and outreach materials' },
+      { amount: 1000, benefit: 'Robot/cart recognition where event rules allow' },
+    ],
+  },
 }
 
 export type PlatformModule = {

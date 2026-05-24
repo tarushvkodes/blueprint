@@ -39,19 +39,31 @@ function parseBcData(html) {
   }
 }
 
-function productCategory(name) {
-  const text = name.toLowerCase();
+function productCategory(name, description = '') {
+  const text = `${name} ${description}`.toLowerCase();
+  if (/linear|slide/.test(text)) return 'Linear motion';
   if (/motor|gearbox|servo/.test(text)) return /servo/.test(text) ? 'Servos' : 'Motors';
-  if (/hub|driver|control|battery|wire|cable|sensor|switch/.test(text)) return 'Control system';
+  if (/hub|driver|control|battery|wire|cable|sensor|switch|xt30/.test(text)) return 'Control system';
   if (/wheel|mecanum|traction/.test(text)) return 'Wheels';
   if (/gear|sprocket|chain|belt|pulley/.test(text)) return 'Power transmission';
   if (/bracket|channel|extrusion|shaft|bearing|screw|nut|standoff/.test(text)) return 'Structure';
-  if (/linear|slide/.test(text)) return 'Linear motion';
   return 'General FTC parts';
 }
 
-async function parseRevProduct(url) {
-  const html = await fetchText(url);
+function normalizeProductUrl($, fallbackUrl) {
+  const canonical = $('link[rel="canonical"]').attr('href') || fallbackUrl;
+  return canonical.startsWith('http') ? canonical : new URL(canonical, fallbackUrl).href;
+}
+
+function stockLabel(bcData, htmlText) {
+  const text = htmlText.toLowerCase();
+  if (bcData?.product_attributes?.instock === false || /out of stock|sold out/.test(text)) return 'Out of stock';
+  if (bcData?.product_attributes?.purchasable === false || /not purchasable|coming soon/.test(text)) return 'Not purchasable online';
+  if (/add to cart|in stock|available/.test(text)) return 'Available/unknown quantity';
+  return 'Availability not checked';
+}
+
+export function parseRevProductHtml(url, html, checkedAt = nowIso()) {
   const $ = cheerio.load(html);
   const bcData = parseBcData(html);
   const jsonLd = parseJsonLd($).find((entry) => entry['@type'] === 'Product') || {};
@@ -67,7 +79,7 @@ async function parseRevProduct(url) {
   const name = normalizeWhitespace(jsonLd.name || currentProduct.title || $('.productView-title').first().text() || $('h1').first().text());
   const sku = normalizeWhitespace(bcData?.product_attributes?.sku || jsonLd.sku || $('[data-product-sku]').first().text() || currentProduct.sku);
   const price = Number(bcData?.product_attributes?.price?.without_tax?.value ?? $('meta[property="product:price:amount"]').attr('content') ?? String($('.price--main').first().text()).replace(/[^0-9.]/g, '')) || 0;
-  const productUrl = $('link[rel="canonical"]').attr('href') || url;
+  const productUrl = normalizeProductUrl($, url);
   const image = $('meta[property="og:image"]').attr('content') || (Array.isArray(jsonLd.image) ? jsonLd.image[0] : jsonLd.image) || '';
   const docs = [];
   $('a[href]').each((_index, anchor) => {
@@ -79,12 +91,13 @@ async function parseRevProduct(url) {
     }
   });
   const description = normalizeWhitespace($('.productView-description, [data-content-region="product_below_content"]').text() || jsonLd.description || $('meta[name="description"]').attr('content') || '');
+  const searchText = normalizeWhitespace(`${sku} ${name} ${productCategory(name, description)} ${description}`);
   return {
     id: sku || productUrl,
     supplier: 'REV Robotics',
     sku,
     name,
-    category: productCategory(name),
+    category: productCategory(name, description),
     price,
     weight: bcData?.product_attributes?.weight || null,
     dimensions: null,
@@ -93,15 +106,22 @@ async function parseRevProduct(url) {
     cadUrl: docs.find((doc) => /\.(step|stp|stl|x_t|sldprt|sldasm|iges|igs)(\?|$)/i.test(doc)) || null,
     docs,
     image,
-    stockStatus: bcData?.product_attributes?.instock === false ? 'Out of stock' : bcData?.product_attributes?.purchasable === false ? 'Not purchasable online' : 'Available/unknown quantity',
-    lastChecked: nowIso(),
+    stockStatus: stockLabel(bcData, html),
+    purchasable: !/out of stock|not purchasable/i.test(stockLabel(bcData, html)),
+    lastChecked: checkedAt,
     ftcLegalityStatus: 'Needs rules citation review',
     compatibleParts: [],
     requiredAccessories: [],
     electricalRequirements: null,
     mechanicalProperties: {},
     notes: description.slice(0, 700),
+    searchText,
   };
+}
+
+async function parseRevProduct(url) {
+  const html = await fetchText(url);
+  return parseRevProductHtml(url, html);
 }
 
 async function discoverRevUrls({ query = 'ftc', limit = 30 } = {}) {
@@ -133,7 +153,15 @@ export async function syncRevCatalog(options = {}) {
       products.push({ productUrl: url, error: error.message, lastChecked: nowIso() });
     }
   }
-  await fsp.writeFile(path.join(cacheDir, 'rev-catalog.json'), JSON.stringify(Array.from(state.catalog.values()), null, 2));
+  const values = Array.from(state.catalog.values());
+  await fsp.writeFile(path.join(cacheDir, 'rev-catalog.json'), JSON.stringify(values, null, 2));
+  await fsp.writeFile(path.join(cacheDir, 'rev-catalog-meta.json'), JSON.stringify({
+    syncedAt: nowIso(),
+    query: options.query || 'ftc',
+    requestedLimit: options.limit || 30,
+    itemCount: values.length,
+    errorCount: products.filter((product) => product.error).length,
+  }, null, 2));
   return products;
 }
 
@@ -150,7 +178,7 @@ export function searchCatalog(query, limit = 20) {
   const scored = products
     .map((product) => ({
       product,
-      score: scoreText(`${product.sku} ${product.name} ${product.category} ${product.notes}`, query),
+      score: scoreText(product.searchText || `${product.sku} ${product.name} ${product.category} ${product.notes}`, query),
     }))
     .filter((entry) => entry.score > 0 || !query)
     .sort((a, b) => b.score - a.score || a.product.name.localeCompare(b.product.name));

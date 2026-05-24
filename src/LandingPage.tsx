@@ -9,6 +9,7 @@ import {
   MessageSquareText,
   ShieldCheck,
   Sparkles,
+  WandSparkles,
 } from 'lucide-react'
 import { useRef } from 'react'
 import { useLandingAnimations } from './hooks/useLandingAnimations'
@@ -35,6 +36,19 @@ type LandingPageProps = {
   activeAccordion: number
   setActiveAccordion: (index: number) => void
   openWorkspace: (tab?: WorkspaceTab) => void
+  startDemo: () => void
+  demoRunning?: boolean
+}
+
+function physicsVisualClass(mechanism: string) {
+  const text = mechanism.toLowerCase()
+  if (/battery|current/.test(text)) return 'physics-visual-power'
+  if (/tip|gravity|center/.test(text)) return 'physics-visual-balance'
+  if (/intake|roller/.test(text)) return 'physics-visual-intake'
+  if (/arm/.test(text)) return 'physics-visual-arm'
+  if (/lift/.test(text)) return 'physics-visual-lift'
+  if (/torque/.test(text)) return 'physics-visual-torque'
+  return 'physics-visual-speed'
 }
 
 export function LandingPage({
@@ -46,6 +60,8 @@ export function LandingPage({
   activeAccordion,
   setActiveAccordion,
   openWorkspace,
+  startDemo,
+  demoRunning = false,
 }: LandingPageProps) {
   const manifestoRef = useRef<HTMLParagraphElement>(null)
   const pinnedRef = useRef<HTMLElement>(null)
@@ -90,6 +106,9 @@ export function LandingPage({
             starter CAD, FTC Java code, build instructions, grants, and driver optimization.
           </p>
           <div className="hero-actions">
+            <button className="button button-primary" type="button" onClick={startDemo} disabled={demoRunning}>
+              {demoRunning ? 'Building demo' : 'Demo'} <WandSparkles size={18} />
+            </button>
             <button className="button button-primary" type="button" onClick={() => openWorkspace('Dashboard')}>
               Generate project <ChevronRight size={18} />
             </button>
@@ -275,7 +294,10 @@ export function LandingPage({
         <div className="physics-grid">
           {project.physics.map((item) => (
             <article className="physics-card liquid-glass group" key={item.mechanism}>
-              <div className="physics-card-media image-scale" />
+              <div className={`physics-card-media image-scale ${physicsVisualClass(item.mechanism)}`}>
+                <i />
+                <b />
+              </div>
               <div>
                 <span>{item.margin}</span>
                 <h3>{item.mechanism}</h3>

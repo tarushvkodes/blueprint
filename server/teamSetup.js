@@ -39,6 +39,20 @@ function allowedValue(value, allowed, fallback) {
   return allowed.find((item) => item.toLowerCase() === normalized.toLowerCase()) || fallback;
 }
 
+function cleanBomOverrides(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([key, override]) => {
+    const safeOverride = override && typeof override === 'object' ? override : {};
+    const qty = Number(safeOverride.qty);
+    const price = Number(safeOverride.price);
+    return [cleanText(key).slice(0, 120), {
+      ...(Number.isFinite(qty) ? { qty: Math.max(0, Math.round(qty)) } : {}),
+      ...(Number.isFinite(price) ? { price: Math.max(0, price) } : {}),
+      ...(safeOverride.note ? { note: cleanText(safeOverride.note).slice(0, 160) } : {}),
+    }];
+  }).filter(([key]) => key));
+}
+
 export function sanitizeTeamDraft(team = {}) {
   return {
     ...team,
@@ -62,6 +76,7 @@ export function sanitizeTeamDraft(team = {}) {
     cadExperience: allowedValue(team.cadExperience, EXPERIENCE_LEVELS, 'Beginner'),
     programmingExperience: allowedValue(team.programmingExperience, EXPERIENCE_LEVELS, 'Beginner'),
     buildSpace: cleanText(team.buildSpace),
+    bomOverrides: cleanBomOverrides(team.bomOverrides),
   };
 }
 

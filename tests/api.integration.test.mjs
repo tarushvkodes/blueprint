@@ -113,6 +113,14 @@ test('Blueprint API integration', async (t) => {
     assert.equal(health.ok, true);
     assert.equal(health.service, 'blueprint-api');
 
+    const aiStatus = await requestJson('/ai/status');
+    assert.equal(aiStatus.provider, 'local-fallback');
+    assert.equal(aiStatus.credentialsMode, 'none');
+
+    const smoke = await requestJson('/ai/smoke-test', { method: 'POST' });
+    assert.equal(smoke.smokeTest.ok, false);
+    assert.equal(smoke.smokeTest.generatedBy, 'local-fallback');
+
     const demo = await requestJson('/project/demo');
     assert.ok(demo.id);
     assert.equal(demo.conceptQuality.accepted, true);
@@ -124,6 +132,7 @@ test('Blueprint API integration', async (t) => {
     assert.ok(demo.bom.some((item) => (item.mechanismIds || [item.mechanismId]).some((id) => selectedMechanismIds.includes(id))));
     assert.ok(demo.physics.some((item) => selectedMechanismIds.includes(item.mechanismId)));
     assert.ok(demo.buildGuide.some((step) => selectedMechanismIds.includes(step.mechanismId)));
+    assert.ok(demo.autonomousPlan.path.length >= 4);
 
     const code = await requestJson(`/projects/${demo.id}/code`);
     assert.match(code['README.md'], new RegExp(selectedMechanismIds[0]));
@@ -137,6 +146,27 @@ test('Blueprint API integration', async (t) => {
     assert.equal(validation.ok, true);
     assert.deepEqual(validation.issues, []);
     assert.ok(validation.hardwareNames.includes('left_front'));
+  });
+
+  await t.test('demo run creates a complete walkthrough project', async () => {
+    const demoRun = await requestJson('/projects/demo-run', { method: 'POST' });
+    t.after(async () => {
+      await requestJson(`/projects/${demoRun.id}`, { method: 'DELETE' }).catch(() => {});
+    });
+
+    assert.equal(demoRun.status, 'demo-ready');
+    assert.equal(demoRun.setupValidation.ready, true);
+    assert.ok(demoRun.team.goals.includes('demo-ready FTC robot plan'));
+    assert.ok(demoRun.strategy.recommendation);
+    assert.ok(demoRun.bom.length > 0);
+    assert.ok(demoRun.bomSummary.estimatedCheckoutTotal >= 0);
+    assert.ok(demoRun.physics.length > 0);
+    assert.ok(demoRun.cad.blueprintViews.top);
+    assert.ok(demoRun.code['TeleOpMain.java']);
+    assert.ok(demoRun.autonomousPlan.path.length >= 4);
+    assert.ok(demoRun.buildGuide.length > 0);
+    assert.ok(demoRun.driverAnalysis.eventCount > 0);
+    assert.ok(demoRun.sponsorDesk.subject.includes('Blue Orbit Demo FTC'));
   });
 
   await t.test('project create, update, list, and delete round trip', async () => {
@@ -217,6 +247,28 @@ test('Blueprint API integration', async (t) => {
     assert.equal(updated.setupValidation.ready, true);
   });
 
+  await t.test('BOM overrides update quantity, price, and checkout totals', async () => {
+    const project = await createProject({ name: 'Integration BOM Override Team' });
+    t.after(async () => {
+      await requestJson(`/projects/${project.id}`, { method: 'DELETE' }).catch(() => {});
+    });
+    const target = project.bom.find((item) => item.sku && item.sku !== 'SKU pending') || project.bom[0];
+    const updated = await requestJson(`/projects/${project.id}/bom/overrides`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        key: target.sku,
+        override: { qty: 1, price: 12.34, note: 'sponsor quote' },
+      }),
+    });
+    const overridden = updated.bom.find((item) => item.sku === target.sku);
+
+    assert.equal(overridden.qty, 1);
+    assert.equal(overridden.price, 12.34);
+    assert.equal(overridden.overrideNote, 'sponsor quote');
+    assert.equal(overridden.overridden, true);
+    assert.equal(updated.bomOverrides[target.sku].price, 12.34);
+  });
+
   await t.test('CAD, build-guide, catalog, and chat fallbacks stay usable', async () => {
     const project = await createProject({ name: 'Integration Artifact Team' });
     t.after(async () => {
@@ -229,6 +281,8 @@ test('Blueprint API integration', async (t) => {
     const cad = await cadResponse.json();
     assert.equal(cad.asset.version, '2.0');
     assert.ok(cad.extras.disclaimer.includes('Conceptual CAD starter'));
+    assert.ok(cad.extras.blueprintViews.top);
+    assert.ok(cad.extras.wiringView.runs.length > 0);
 
     const buildGuideResponse = await fetch(`${apiBase}/projects/${project.id}/build-guide/export.html`);
     assert.equal(buildGuideResponse.status, 200);
@@ -246,6 +300,13 @@ test('Blueprint API integration', async (t) => {
     assert.equal(chat.generatedBy, 'local-fallback');
     assert.match(chat.answer, /cited manual section/i);
     assert.ok(Array.isArray(chat.citations));
+    assert.ok(chat.suggestedActions.some((action) => action.action === 'regenerate-bom'));
+    const applied = await requestJson(`/projects/${project.id}/chat/apply`, {
+      method: 'POST',
+      body: JSON.stringify({ suggestion: chat.suggestedActions.find((action) => action.action === 'add-priority') }),
+    });
+    assert.equal(applied.applied, true);
+    assert.ok(applied.project.team.priorities.includes('Low cost'));
 
     const goal = await requestJson(`/projects/${project.id}/chat`, {
       method: 'POST',

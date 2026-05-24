@@ -16,33 +16,41 @@ import {
   SlidersHorizontal,
   Upload,
   Users,
+  FolderOpen,
+  HandCoins,
 } from 'lucide-react'
 import { useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { artifactUrl } from './api'
 import { codeSample, defaultBlueprintQuestion } from './projectData'
 import { validateTeamSetupDraft } from './setupValidation'
-import { workspaceTabs, type AiStatus, type BuildGuideStep, type ProjectData, type Team, type WorkspaceTab } from './types'
+import { workspaceTabs, type AiStatus, type BuildGuideStep, type ChatSuggestion, type ProjectData, type ProjectSummary, type Team, type WorkspaceTab } from './types'
 import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
 
 type WorkspaceProps = {
   project: ProjectData
+  projectList: ProjectSummary[]
   selectedConcept: number
   total: number
   activeTab: WorkspaceTab
   setActiveTab: (tab: WorkspaceTab) => void
   status: string
   chatAnswer: string
+  chatSuggestions: ChatSuggestion[]
   aiStatus: AiStatus | null
   openLanding: () => void
   createProject: (team: Team) => void
+  switchProject: (projectId: string) => void
   regenerateProject: () => void
   saveIntake: (team: Team) => void
   generateFullBlueprint: (team?: Team) => void
   selectDesign: (index: number) => void
+  updateBomOverride: (key: string, override: { qty?: number, price?: number, note?: string }) => void
   uploadManual: (file: File) => void
+  ingestManualUrl: (url: string) => void
   syncCatalog: () => void
   analyzeDriverLogs: (file: File) => void
   askBlueprint: (message?: string) => void
+  applyChatSuggestion: (suggestion: ChatSuggestion) => void
   downloadCode: () => void
 }
 
@@ -73,22 +81,28 @@ const strategyModes = [
 
 export function Workspace({
   project,
+  projectList,
   selectedConcept,
   total,
   activeTab,
   setActiveTab,
   status,
   chatAnswer,
+  chatSuggestions,
   aiStatus,
   openLanding,
   createProject,
+  switchProject,
   regenerateProject,
   saveIntake,
   generateFullBlueprint,
   selectDesign,
+  updateBomOverride,
   uploadManual,
+  ingestManualUrl,
   syncCatalog,
   askBlueprint,
+  applyChatSuggestion,
   analyzeDriverLogs,
   downloadCode,
 }: WorkspaceProps) {
@@ -104,6 +118,8 @@ export function Workspace({
   const [wizardStep, setWizardStep] = useState(0)
   const [inventoryUploadStatus, setInventoryUploadStatus] = useState('')
   const [chatDraft, setChatDraft] = useState(defaultBlueprintQuestion)
+  const [completedBuildSteps, setCompletedBuildSteps] = useState<Record<string, boolean>>({})
+  const [sourceUrlDraft, setSourceUrlDraft] = useState('')
   const teamDraft = teamDraftState.projectId === project.id ? teamDraftState.team : project.team
   const setTeamDraft = (updater: Team | ((current: Team) => Team)) => {
     setTeamDraftState((current) => {
@@ -119,6 +135,7 @@ export function Workspace({
   const setupReady = setupValidation.ready
   const setupComplete = setupValidation.completed
   const currentWizardStep = wizardSteps[wizardStep]
+  const activeProjectId = project.id || ''
 
   const updateTeamField = (field: keyof Team, value: string | number) => {
     setTeamDraft((current) => ({ ...current, [field]: value }))
@@ -189,6 +206,17 @@ export function Workspace({
     }
   }
 
+  const submitSourceUrl = () => {
+    const url = sourceUrlDraft.trim()
+    if (!url) return
+    ingestManualUrl(url)
+    setSourceUrlDraft('')
+  }
+
+  const buildProgress = buildGuideRows.length
+    ? Object.values(completedBuildSteps).filter(Boolean).length / buildGuideRows.length
+    : 0
+
   return (
     <main className="app-shell workspace-screen">
       <ShaderBackdrop variant="workspace" />
@@ -211,10 +239,23 @@ export function Workspace({
             </button>
           ))}
         </div>
-        <button className="nav-action workspace-action" type="button" onClick={regenerateProject}>
-          <RefreshCw size={16} />
-          Regenerate
-        </button>
+        <div className="workspace-nav-actions">
+          <label className="project-switcher" aria-label="Saved project switcher">
+            <FolderOpen size={16} />
+            <select value={activeProjectId} onChange={(event) => switchProject(event.target.value)}>
+              <option value={activeProjectId}>{project.team.name}</option>
+              {projectList
+                .filter((item) => item.id !== activeProjectId)
+                .map((item) => (
+                  <option value={item.id} key={item.id}>{item.team.name} #{item.team.number}</option>
+                ))}
+            </select>
+          </label>
+          <button className="nav-action workspace-action" type="button" onClick={regenerateProject}>
+            <RefreshCw size={16} />
+            Regenerate
+          </button>
+        </div>
       </nav>
 
       <section className="workspace-hero">
@@ -252,6 +293,12 @@ export function Workspace({
           <div>
             <span>AI provider</span>
             <strong>{aiStatus?.message || project.aiStatus?.message || 'Local fallback active'}</strong>
+            <small>
+              {(aiStatus?.credentialsMode || project.aiStatus?.credentialsMode || 'none').toUpperCase()}
+              {(aiStatus?.lastLatencyMs || project.aiStatus?.lastLatencyMs)
+                ? ` - ${aiStatus?.lastLatencyMs || project.aiStatus?.lastLatencyMs}ms`
+                : ''}
+            </small>
           </div>
           <div>
             <span>Season source</span>
@@ -272,6 +319,10 @@ export function Workspace({
           <div>
             <span>Team level</span>
             <strong>{project.team.experience}</strong>
+          </div>
+          <div>
+            <span>Saved projects</span>
+            <strong>{projectList.length || (project.demo ? 0 : 1)}</strong>
           </div>
         </aside>
 
@@ -495,11 +546,31 @@ export function Workspace({
                   <p>{project.season?.title || project.season?.seasonName || 'Upload a current FTC manual or season PDF.'}</p>
                   <small>{project.season?.manualVersion || 'No manual version detected'} · {project.sourceDocuments?.length || 0} source documents</small>
                   {project.season?.isSample && <em>Sample DECODE data is active until a PDF is uploaded.</em>}
+                  {!!project.sourceDocuments?.length && (
+                    <div className="source-doc-list">
+                      {project.sourceDocuments.slice(0, 5).map((doc) => (
+                        <div key={doc.id}>
+                          <strong>{doc.title}</strong>
+                          <span>{doc.health?.chunkCount || 0} chunks · {doc.health?.ruleCount || 0} rules · {doc.health?.status || 'unchecked'}</span>
+                          {!!doc.health?.warnings?.length && <em>{doc.health.warnings[0]}</em>}
+                          <span>{doc.type} · {doc.version || 'version pending'} · {doc.pages || 0} pages</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <label className="file-upload">
                     <Upload size={18} />
                     Upload season PDF
                     <input type="file" accept="application/pdf,.pdf" onChange={handleManualUpload} />
                   </label>
+                  <div className="source-url-ingest">
+                    <input
+                      value={sourceUrlDraft}
+                      onChange={(event) => setSourceUrlDraft(event.target.value)}
+                      placeholder="https://...official-season-resource.pdf"
+                    />
+                    <button type="button" onClick={submitSourceUrl}>Index URL</button>
+                  </div>
 
                   <div className="data-upload-stack">
                     <label className="file-upload secondary-upload">
@@ -584,12 +655,52 @@ export function Workspace({
 
           {activeTab === 'Strategy' && (
             <div className="workspace-panel">
-              <h2>Strategy</h2>
-              <p>Prioritize reliable scoring, low penalty exposure, driver practice, and mechanisms that match the team budget.</p>
-              <div className="workspace-list">
-                {['Reliable autonomous', 'Repeatable teleop cycles', 'Alliance-friendly behavior', 'Low-maintenance mechanisms'].map((item) => (
-                  <span key={item}><CheckCircle2 size={16} />{item}</span>
-                ))}
+              <div className="workspace-panel-title">
+                <div>
+                  <h2>Strategy</h2>
+                  <p>{project.strategy?.recommendation || 'Generate a team-specific strategy from the manual and constraints.'}</p>
+                </div>
+                <strong>{project.strategy?.generatedBy || project.generatedBy || 'local'}</strong>
+              </div>
+              <div className="strategy-grid">
+                <article>
+                  <span>Score first</span>
+                  {(project.strategy?.scoringPriorities || []).map((item) => (
+                    <small key={item}><CheckCircle2 size={14} />{item}</small>
+                  ))}
+                </article>
+                <article>
+                  <span>Ignore for now</span>
+                  {(project.strategy?.whatToIgnore || []).map((item) => <small key={item}>{item}</small>)}
+                </article>
+                <article>
+                  <span>Autonomous</span>
+                  {(project.strategy?.autonomous || []).map((item) => <small key={item}>{item}</small>)}
+                </article>
+                <article>
+                  <span>TeleOp</span>
+                  {(project.strategy?.teleOp || []).map((item) => <small key={item}>{item}</small>)}
+                </article>
+                <article>
+                  <span>Endgame</span>
+                  {(project.strategy?.endgame || []).map((item) => <small key={item}>{item}</small>)}
+                </article>
+                <article>
+                  <span>Driver practice</span>
+                  {(project.strategy?.driverPracticeGoals || []).map((item) => <small key={item}>{item}</small>)}
+                </article>
+                <article className="strategy-wide">
+                  <span>Alliance fit</span>
+                  <p>{project.strategy?.allianceCompatibility}</p>
+                </article>
+                <article className="strategy-wide">
+                  <span>Citations</span>
+                  {(project.strategy?.citations?.length ? project.strategy.citations : [{ ruleNumber: 'Citation required', manualSection: 'Upload current manual', sourceDocument: 'Indexed documents', confidence: 'Low' }]).slice(0, 3).map((citation) => (
+                    <small key={`${citation.ruleNumber}-${citation.manualSection}`}>
+                      {citation.ruleNumber} · {citation.manualSection} · {citation.confidence}
+                    </small>
+                  ))}
+                </article>
               </div>
             </div>
           )}
@@ -635,11 +746,47 @@ export function Workspace({
               </div>
               <div className="workspace-table">
                 {project.bom.map((item, index) => (
-                  <div key={`${item.sku}-${index}`}>
+                  <div className={item.overridden ? 'is-overridden' : ''} key={`${item.sku}-${index}`}>
                     <span>{item.subsystem}</span>
                     <strong>{item.part}</strong>
                     <small>{item.sku}</small>
                     <em>{item.qty} x ${item.price}</em>
+                    <label>
+                      Qty
+                      <input
+                        type="number"
+                        min="0"
+                        defaultValue={item.qty}
+                        onBlur={(event) => updateBomOverride(item.sku, {
+                          ...(project.bomOverrides?.[item.sku] || {}),
+                          qty: Number(event.target.value),
+                        })}
+                      />
+                    </label>
+                    <label>
+                      Price
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        defaultValue={item.price}
+                        onBlur={(event) => updateBomOverride(item.sku, {
+                          ...(project.bomOverrides?.[item.sku] || {}),
+                          price: Number(event.target.value),
+                        })}
+                      />
+                    </label>
+                    <label>
+                      Note
+                      <input
+                        defaultValue={item.overrideNote || ''}
+                        placeholder="donated, quote, reuse"
+                        onBlur={(event) => updateBomOverride(item.sku, {
+                          ...(project.bomOverrides?.[item.sku] || {}),
+                          note: event.target.value,
+                        })}
+                      />
+                    </label>
                   </div>
                 ))}
               </div>
@@ -700,19 +847,202 @@ export function Workspace({
           {activeTab === 'Build' && (
             <div className="workspace-panel">
               <div className="workspace-panel-title">
-                <h2>Build guide</h2>
+                <div>
+                  <h2>Build guide</h2>
+                  <p>{Math.round(buildProgress * 100)}% complete across {buildGuideRows.length} build, wire, test, and tune steps.</p>
+                </div>
                 <button type="button" onClick={() => openArtifact(project.artifactUrls?.buildGuideHtml)}><Download size={16} /> HTML</button>
+              </div>
+              <div className="build-progress">
+                <i style={{ width: `${Math.round(buildProgress * 100)}%` }} />
               </div>
               <div className="timeline workspace-timeline">
                 {buildGuideRows.map((step, index) => (
-                  <article key={`${step.phase}-${index}`}>
+                  <article className={completedBuildSteps[`${step.phase}-${index}`] ? 'is-complete' : ''} key={`${step.phase}-${index}`}>
                     <span>{index + 1}</span>
                     <h3>{step.title || step.phase}</h3>
                     <p>{step.instructions}</p>
+                    {step.safetyWarning && <small>Safety: {step.safetyWarning}</small>}
+                    {!!step.parts?.length && <small>Parts: {step.parts.join(', ')}</small>}
+                    {!!step.tools?.length && <small>Tools: {step.tools.join(', ')}</small>}
                     {step.diagram && <small>{step.diagram}</small>}
+                    {step.checkpoint && <small>Checkpoint: {step.checkpoint}</small>}
                     {step.test && <small>Test: {step.test}</small>}
+                    <button
+                      type="button"
+                      onClick={() => setCompletedBuildSteps((current) => ({
+                        ...current,
+                        [`${step.phase}-${index}`]: !current[`${step.phase}-${index}`],
+                      }))}
+                    >
+                      {completedBuildSteps[`${step.phase}-${index}`] ? 'Mark open' : 'Mark complete'}
+                    </button>
                   </article>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Autonomous' && (
+            <div className="workspace-panel">
+              <div className="workspace-panel-title">
+                <div>
+                  <h2>Autonomous plan</h2>
+                  <p>{project.autonomousPlan?.desiredAction || 'Generate a drivetrain-matched autonomous path.'}</p>
+                </div>
+                <strong>{project.autonomousPlan?.reliability || 'Plan pending'}</strong>
+              </div>
+              <div className="auto-grid">
+                <article>
+                  <span>Setup</span>
+                  <strong>{project.autonomousPlan?.drivetrain || 'drivetrain pending'}</strong>
+                  <p>{project.autonomousPlan?.startPosition} · {project.autonomousPlan?.alliance}</p>
+                  <div className="tier-list">
+                    {(project.autonomousPlan?.sensors || []).map((sensor) => <small key={sensor}>{sensor}</small>)}
+                  </div>
+                </article>
+                <article>
+                  <span>Path sequence</span>
+                  <div className="sequence-list">
+                    {(project.autonomousPlan?.path || []).map((step) => (
+                      <small key={step.order}>{step.order}. {step.action}</small>
+                    ))}
+                  </div>
+                </article>
+                <article>
+                  <span>Pseudocode</span>
+                  <pre><code>{(project.autonomousPlan?.pseudocode || []).join('\n')}</code></pre>
+                </article>
+                <article>
+                  <span>Tuning</span>
+                  <div className="control-map">
+                    {Object.entries(project.autonomousPlan?.tuningConstants || {}).map(([key, value]) => (
+                      <small key={key}>{key}: {value}</small>
+                    ))}
+                  </div>
+                </article>
+                <article>
+                  <span>Testing plan</span>
+                  <ul>
+                    {(project.autonomousPlan?.testingPlan || []).map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </article>
+                <article>
+                  <span>Warnings</span>
+                  <ul>
+                    {(project.autonomousPlan?.warnings || []).map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </article>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Driver Logs' && (
+            <div className="workspace-panel">
+              <div className="workspace-panel-title">
+                <div>
+                  <h2>Driver logs</h2>
+                  <p>Upload CSV or JSON controller logs to find repeated inputs, macro candidates, and driver ownership changes.</p>
+                </div>
+                <label className="file-upload secondary-upload">
+                  <SlidersHorizontal size={18} />
+                  Analyze logs
+                  <input type="file" accept=".csv,.json,text/csv,application/json" onChange={handleDriverLogUpload} />
+                </label>
+              </div>
+              <div className="driver-grid">
+                <article>
+                  <span>Events</span>
+                  <strong>{project.driverAnalysis?.eventCount ?? 0}</strong>
+                  <p>{project.driverInsight}</p>
+                </article>
+                <article>
+                  <span>Hot inputs</span>
+                  <div className="usage-bars">
+                    {(project.driverAnalysis?.buttonUsage?.length ? project.driverAnalysis.buttonUsage : [{ button: 'Upload a log', count: 0 }]).map((item) => (
+                      <div key={item.button}>
+                        <span>{item.button}</span>
+                        <i style={{ width: `${Math.min(100, Math.max(8, item.count * 10))}%` }} />
+                        <em>{item.count}</em>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+                <article>
+                  <span>Timing</span>
+                  <strong>{project.driverAnalysis?.timingGaps?.averageSeconds ?? 0}s</strong>
+                  <p>Average input gap. P90 {project.driverAnalysis?.timingGaps?.p90Seconds ?? 0}s, max {project.driverAnalysis?.timingGaps?.maxSeconds ?? 0}s.</p>
+                  <div className="phase-list">
+                    {(project.driverAnalysis?.phaseBreakdown?.length ? project.driverAnalysis.phaseBreakdown : [{ phase: 'waiting for logs', count: 0 }]).map((item) => (
+                      <small key={item.phase}>{item.phase}: {item.count}</small>
+                    ))}
+                  </div>
+                </article>
+                <article>
+                  <span>Repeated sequences</span>
+                  <div className="sequence-list">
+                    {(project.driverAnalysis?.repeatedSequences?.length ? project.driverAnalysis.repeatedSequences : [{ sequence: ['No repeated sequence yet'], count: 0, recommendation: 'Upload match logs with timestamps to find macro candidates.' }]).map((item) => (
+                      <small key={`${item.sequence.join('-')}-${item.count}`}>
+                        {item.sequence.join(' -> ')} · {item.count}x
+                      </small>
+                    ))}
+                  </div>
+                </article>
+                <article>
+                  <span>Recommendations</span>
+                  <ul>
+                    {(project.driverAnalysis?.suggestions?.length ? project.driverAnalysis.suggestions : [project.driverInsight]).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </article>
+                <article>
+                  <span>Controller map</span>
+                  <div className="control-map">
+                    {Object.entries(project.driverAnalysis?.recommendedMap?.driver1 || { leftStick: 'drive/strafe', rightStickX: 'turn', leftBumper: 'slow mode' }).map(([control, action]) => (
+                      <small key={control}>D1 {control}: {action}</small>
+                    ))}
+                    {Object.entries(project.driverAnalysis?.recommendedMap?.driver2 || { a: 'intake close', b: 'intake open', y: 'high preset' }).map(([control, action]) => (
+                      <small key={control}>D2 {control}: {action}</small>
+                    ))}
+                  </div>
+                </article>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Grants' && (
+            <div className="workspace-panel">
+              <div className="workspace-panel-title">
+                <div>
+                  <h2>Grant desk</h2>
+                  <p>Sponsor materials pull from team identity, budget, BOM gaps, and the current build plan.</p>
+                </div>
+                <HandCoins size={24} />
+              </div>
+              <div className="grant-grid">
+                <article className="grant-draft">
+                  <span>Sponsor email</span>
+                  <h3>{project.sponsorDesk?.subject || project.sponsorDraft}</h3>
+                  <p>{project.sponsorDesk?.body || `Hi Community Partner,\n\n${project.team.name} is raising funds for FTC parts, tools, registration, and outreach. A contribution helps students build, test, and document a safe robot plan.`}</p>
+                </article>
+                <article>
+                  <span>Budget justification</span>
+                  <strong>${(project.bomSummary?.estimatedCheckoutTotal ?? total).toLocaleString()}</strong>
+                  <p>Estimated checkout need after owned inventory, with ${Math.max(0, project.team.budget - (project.bomSummary?.estimatedCheckoutTotal ?? total)).toLocaleString()} remaining against the current budget.</p>
+                </article>
+                <article>
+                  <span>Donation tiers</span>
+                  <div className="tier-list">
+                    {(project.sponsorDesk?.tiers || [
+                      { amount: 250, benefit: 'Team website and social recognition' },
+                      { amount: 500, benefit: 'Logo on pit display and outreach materials' },
+                      { amount: 1000, benefit: 'Robot/cart recognition where event rules allow' },
+                    ]).map((tier) => (
+                      <small key={tier.amount}>${tier.amount}: {tier.benefit}</small>
+                    ))}
+                  </div>
+                </article>
               </div>
             </div>
           )}
@@ -731,6 +1061,16 @@ export function Workspace({
                 <button type="button" onClick={submitChat}><Send size={16} /> Send</button>
               </div>
               {chatAnswer && <p className="workspace-answer">{chatAnswer}</p>}
+              {!!chatSuggestions.length && (
+                <div className="chat-suggestions">
+                  {chatSuggestions.map((suggestion) => (
+                    <button type="button" key={suggestion.id} onClick={() => applyChatSuggestion(suggestion)}>
+                      <strong>{suggestion.label}</strong>
+                      <span>{suggestion.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

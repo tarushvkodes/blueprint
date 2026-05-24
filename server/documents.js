@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { PDFParse } from 'pdf-parse';
-import { defaultFiles } from './config.js';
+import { defaultFiles, uploadDir } from './config.js';
 import { state } from './state.js';
 import { firstMatch, normalizeWhitespace, nowIso, scoreText, slugId, snippetAround } from './utils.js';
 
@@ -43,6 +43,16 @@ function makeChunk({ documentId, title, sourceUrl, type, version, sourceDate, se
     ruleNumber: inferRuleNumber(text),
     text: text.trim(),
   };
+}
+
+export function inferSourceType({ title = '', sourceUrl = '', fallback = 'season-resource' } = {}) {
+  const text = `${title} ${sourceUrl}`.toLowerCase();
+  if (/q[&-]?a|question.*answer|answers/.test(text)) return 'qa';
+  if (/team[ _-]?update|tu\d+/.test(text)) return 'team-update';
+  if (/field.*drawing|field.*setup|field.*assembly/.test(text)) return 'field-drawing';
+  if (/inspection|inspect/.test(text)) return 'inspection-checklist';
+  if (/competition.*manual|game.*manual|manual/.test(text)) return 'manual';
+  return fallback;
 }
 
 export function chunkText(text, { documentId, title, sourceUrl, type, version, sourceDate = null, page = null, pageSize = 1200 }) {
@@ -205,6 +215,38 @@ export async function ingestDocument({ filePath, title, type, sourceUrl = filePa
   return doc;
 }
 
+export async function ingestDocumentFromUrl({ url, title = null, type = null, version = null, sourceDate = null }) {
+  const parsedUrl = new URL(url);
+  if (!['https:', 'http:'].includes(parsedUrl.protocol)) {
+    throw new Error('Only http(s) document URLs are supported.');
+  }
+  const response = await fetch(parsedUrl);
+  if (!response.ok) {
+    throw new Error(`Document download failed with ${response.status}.`);
+  }
+  const contentType = response.headers.get('content-type') || '';
+  const inferredTitle = title || decodeURIComponent(path.basename(parsedUrl.pathname)) || parsedUrl.hostname;
+  if (!/pdf/i.test(contentType) && !/\.pdf($|\?)/i.test(parsedUrl.pathname)) {
+    throw new Error('Only PDF URL ingestion is supported in this MVP.');
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > 25 * 1024 * 1024) {
+    throw new Error('PDF is larger than the 25 MB MVP ingestion limit.');
+  }
+  await fsp.mkdir(uploadDir, { recursive: true });
+  const filePath = path.join(uploadDir, `${slugId('url-doc')}.pdf`);
+  await fsp.writeFile(filePath, bytes);
+  const sourceType = type || inferSourceType({ title: inferredTitle, sourceUrl: url });
+  return ingestDocument({
+    filePath,
+    title: inferredTitle,
+    type: sourceType,
+    sourceUrl: url,
+    version,
+    sourceDate,
+  });
+}
+
 export async function ingestDefaultReferences() {
   const docs = [];
   if (fs.existsSync(defaultFiles.writeup)) {
@@ -214,6 +256,42 @@ export async function ingestDefaultReferences() {
     docs.push(await ingestDocument({ filePath: defaultFiles.manual, title: 'DECODE Competition Manual TU32', type: 'manual', version: 'TU32' }));
   }
   return docs;
+}
+
+function isOfficialSource(sourceUrl = '') {
+  return /firstinspires\.org|ftc-docs\.firstinspires\.org|github\.com\/FIRST-Tech-Challenge/i.test(String(sourceUrl));
+}
+
+export function sourceHealthForDocument(doc = {}, allDocs = Array.from(state.documents.values())) {
+  const chunks = state.chunks.filter((chunk) => chunk.documentId === doc.id);
+  const ruleCount = new Set(chunks.map((chunk) => chunk.ruleNumber).filter(Boolean)).size;
+  const warnings = [];
+  const relatedDocs = allDocs.filter((candidate) => candidate.type === doc.type && candidate.id !== doc.id);
+  const hasVersionConflict = Boolean(doc.version && relatedDocs.some((candidate) => candidate.version && candidate.version !== doc.version));
+  const sourceAgeDays = doc.sourceDate
+    ? Math.floor((Date.now() - Date.parse(doc.sourceDate)) / 86_400_000)
+    : null;
+
+  if (!chunks.length) warnings.push('No searchable chunks were produced.');
+  if ((doc.type === 'manual' || doc.type === 'season-resource') && !doc.version && !doc.seasonSource?.manualVersion) {
+    warnings.push('Manual version was not detected.');
+  }
+  if ((doc.type === 'manual' || doc.type === 'team-update') && !isOfficialSource(doc.sourceUrl)) {
+    warnings.push('Source URL is not recognized as official FIRST/FTC documentation.');
+  }
+  if (hasVersionConflict) warnings.push('Another indexed document of this type has a different version.');
+  if (sourceAgeDays !== null && sourceAgeDays > 240) warnings.push('Source date is older than 240 days; check for team updates or Q&A changes.');
+
+  return {
+    chunkCount: chunks.length,
+    ruleCount,
+    hasPageNumbers: chunks.some((chunk) => Number.isFinite(Number(chunk.page))),
+    officialSource: isOfficialSource(doc.sourceUrl),
+    hasVersionConflict,
+    sourceAgeDays,
+    status: warnings.length ? 'review' : 'ready',
+    warnings,
+  };
 }
 
 export function quoteRule(query, { preferManual = true } = {}) {
