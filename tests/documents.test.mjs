@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chunkText, quoteRule } from '../server/documents.js';
+import { chunkText, inferSourceType, quoteRule, sourceHealthForDocument } from '../server/documents.js';
 import { state } from '../server/state.js';
 
 test('manual chunks preserve page, rule, version, and source date metadata', () => {
@@ -46,6 +46,43 @@ test('rule citations include page metadata from indexed manual chunks', () => {
     assert.equal(citations[0].page, 17);
     assert.equal(citations[0].version, 'V3');
     assert.equal(citations[0].sourceDate, '2026-02-01');
+  } finally {
+    state.chunks = previousChunks;
+  }
+});
+
+test('official resource URL ingestion infers source document type', () => {
+  assert.equal(inferSourceType({ sourceUrl: 'https://firstinspires.org/competition-manual.pdf' }), 'manual');
+  assert.equal(inferSourceType({ sourceUrl: 'https://firstinspires.org/team-update-08.pdf' }), 'team-update');
+  assert.equal(inferSourceType({ title: 'Robot Inspection Checklist' }), 'inspection-checklist');
+  assert.equal(inferSourceType({ title: 'Field Drawings and Setup' }), 'field-drawing');
+});
+
+test('source health reports chunks, rule counts, and version warnings', () => {
+  const previousChunks = state.chunks;
+  const doc = {
+    id: 'health_manual',
+    title: 'Official Competition Manual',
+    type: 'manual',
+    version: null,
+    sourceUrl: 'https://www.firstinspires.org/manual.pdf',
+    sourceDate: new Date().toISOString(),
+  };
+  state.chunks = chunkText('<R101> ROBOT parts must pass inspection.', {
+    documentId: doc.id,
+    title: doc.title,
+    sourceUrl: doc.sourceUrl,
+    type: doc.type,
+    version: null,
+    page: 10,
+  });
+
+  try {
+    const health = sourceHealthForDocument(doc, [doc]);
+    assert.equal(health.chunkCount, 1);
+    assert.equal(health.ruleCount, 1);
+    assert.equal(health.hasPageNumbers, true);
+    assert.ok(health.warnings.some((warning) => /version/i.test(warning)));
   } finally {
     state.chunks = previousChunks;
   }

@@ -15,19 +15,34 @@ function vertexProvider() {
 
 export function aiStatus() {
   const provider = vertexProvider();
+  const verified = provider !== 'local-fallback' && Boolean(state.ai.lastOkAt);
+  const configured = {
+    forceFallback: vertexConfig.forceFallback,
+    expressApiKey: Boolean(vertexConfig.apiKey),
+    applicationDefaultCredentials: Boolean(vertexConfig.projectId),
+  };
   return {
-    ready: provider !== 'local-fallback',
+    ready: verified,
     provider,
+    configured,
+    credentialsMode: provider === 'vertex-express' ? 'api-key' : provider === 'vertex-adc' ? 'adc' : 'none',
     textModel: vertexConfig.textModel,
     imageModel: vertexConfig.imageModel,
     projectId: vertexConfig.projectId || null,
     location: vertexConfig.location || null,
-    message: provider === 'vertex-express'
-      ? 'AI ready via Vertex Express'
-      : provider === 'vertex-adc'
-        ? 'AI ready via Vertex ADC'
-        : 'Local fallback active',
+    message: verified
+      ? (provider === 'vertex-express' ? 'AI ready via Vertex Express' : 'AI ready via Vertex ADC')
+      : provider === 'vertex-express'
+        ? 'Vertex Express configured; smoke test required'
+        : provider === 'vertex-adc'
+          ? 'Vertex ADC configured; smoke test required'
+          : 'Local fallback active',
     lastError: state.ai.lastError,
+    lastOkAt: state.ai.lastOkAt,
+    lastProvider: state.ai.lastProvider,
+    lastLatencyMs: state.ai.lastLatencyMs,
+    lastSmokeTestAt: state.ai.lastSmokeTestAt,
+    smokeTestRecommended: provider !== 'local-fallback' && !state.ai.lastOkAt,
   };
 }
 
@@ -37,8 +52,12 @@ function extractJson(text) {
   try {
     return JSON.parse(trimmed);
   } catch {
-    const first = trimmed.indexOf('{');
-    const last = trimmed.lastIndexOf('}');
+    const objectFirst = trimmed.indexOf('{');
+    const objectLast = trimmed.lastIndexOf('}');
+    const arrayFirst = trimmed.indexOf('[');
+    const arrayLast = trimmed.lastIndexOf(']');
+    const first = objectFirst >= 0 && (arrayFirst < 0 || objectFirst < arrayFirst) ? objectFirst : arrayFirst;
+    const last = first === objectFirst ? objectLast : arrayLast;
     if (first >= 0 && last > first) {
       try {
         return JSON.parse(trimmed.slice(first, last + 1));
@@ -54,7 +73,12 @@ function requestBody(prompt) {
   return {
     contents: [{
       role: 'user',
-      parts: [{ text: prompt }],
+      parts: [{
+        text: [
+          'Return strict JSON only. Do not include markdown fences, commentary, or trailing prose.',
+          prompt,
+        ].join('\n\n'),
+      }],
     }],
     generationConfig: {
       temperature: 0.35,
@@ -100,9 +124,14 @@ function withTimeout(promise, timeoutMs, message, onTimeout = () => {}) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-export async function callVertexJson({ prompt, model = vertexConfig.textModel }) {
+function unverifiedVertexMessage() {
+  return 'Vertex is configured but has not passed a smoke test in this server session. Run POST /api/ai/smoke-test to verify credentials before live AI calls.';
+}
+
+export async function callVertexJson({ prompt, model = vertexConfig.textModel, allowUnverified = false }) {
   const provider = vertexProvider();
   if (provider === 'local-fallback') {
+    state.ai.lastProvider = 'local-fallback';
     return {
       ok: false,
       generatedBy: 'local-fallback',
@@ -110,10 +139,21 @@ export async function callVertexJson({ prompt, model = vertexConfig.textModel })
     };
   }
 
+  if (!allowUnverified && !state.ai.lastOkAt) {
+    state.ai.lastProvider = 'local-fallback';
+    state.ai.lastError = unverifiedVertexMessage();
+    return {
+      ok: false,
+      generatedBy: 'local-fallback',
+      error: unverifiedVertexMessage(),
+    };
+  }
+
   const endpoint = provider === 'vertex-express' ? expressEndpoint(model) : adcEndpoint(model);
   const body = requestBody(prompt);
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    const started = Date.now();
     const controller = new AbortController();
     try {
       const headers = await withTimeout(
@@ -135,9 +175,14 @@ export async function callVertexJson({ prompt, model = vertexConfig.textModel })
       const data = extractJson(text);
       if (!data) throw new Error('Vertex response did not contain valid JSON.');
       state.ai.lastError = null;
+      state.ai.lastOkAt = new Date().toISOString();
+      state.ai.lastProvider = provider;
+      state.ai.lastLatencyMs = Date.now() - started;
       return { ok: true, data, generatedBy: provider };
     } catch (error) {
       state.ai.lastError = error.message;
+      state.ai.lastProvider = provider;
+      state.ai.lastLatencyMs = Date.now() - started;
       if (attempt === 1) {
         return { ok: false, generatedBy: 'local-fallback', error: error.message };
       }
@@ -145,4 +190,21 @@ export async function callVertexJson({ prompt, model = vertexConfig.textModel })
   }
 
   return { ok: false, generatedBy: 'local-fallback', error: 'Vertex request failed.' };
+}
+
+export async function smokeTestVertex() {
+  state.ai.lastSmokeTestAt = new Date().toISOString();
+  const result = await callVertexJson({
+    prompt: 'Return JSON exactly matching this shape: { "ok": true, "service": "vertex", "checks": ["json"] }.',
+    allowUnverified: true,
+  });
+  return {
+    ...aiStatus(),
+    smokeTest: {
+      ok: result.ok && result.data?.ok === true,
+      generatedBy: result.generatedBy,
+      data: result.ok ? result.data : null,
+      error: result.ok ? null : result.error,
+    },
+  };
 }

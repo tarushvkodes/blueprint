@@ -5,6 +5,7 @@ const requiredFiles = [
   'RobotHardware.java',
   'DriveSubsystem.java',
   'LiftSubsystem.java',
+  'IntakeSubsystem.java',
   'TeleOpMain.java',
   'AutoMain.java',
   'README.md',
@@ -15,6 +16,7 @@ const expectedClasses = {
   'RobotHardware.java': 'RobotHardware',
   'DriveSubsystem.java': 'DriveSubsystem',
   'LiftSubsystem.java': 'LiftSubsystem',
+  'IntakeSubsystem.java': 'IntakeSubsystem',
   'TeleOpMain.java': 'TeleOpMain',
   'AutoMain.java': 'AutoMain',
 };
@@ -61,8 +63,14 @@ export function validateGeneratedJava(code = {}) {
   const drive = code['DriveSubsystem.java'] || '';
   if (!drive.includes('Range.clip')) warnings.push('DriveSubsystem.java should clip drive power before setting motor output.');
 
-  if (!code['README.md']?.includes('Hardware configuration names')) {
-    warnings.push('Generated README should list the Driver Station hardware names.');
+  const intake = code['IntakeSubsystem.java'] || '';
+  if (!intake.includes('Range.clip')) warnings.push('IntakeSubsystem.java should clip servo and motor commands.');
+  if (!robotHardware.includes('VoltageSensor') || !teleOp.includes('LOW_BATTERY_WARNING_VOLTS')) {
+    warnings.push('Generated code should surface battery voltage warnings before autonomous tuning.');
+  }
+
+  if (!code['README.md']?.includes('Driver Station hardware checklist')) {
+    warnings.push('Generated README should list the Driver Station hardware checklist.');
   }
 
   return {

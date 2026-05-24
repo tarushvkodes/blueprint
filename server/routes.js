@@ -10,6 +10,7 @@ export function registerRoutes(app, {
   buildConcepts,
   buildGuide,
   buildGuideHtml,
+  buildAutonomousPlan,
   buildStrategy,
   cadAsConceptJson,
   cadAsStep,
@@ -24,12 +25,14 @@ export function registerRoutes(app, {
   generateCode,
   ingestDefaultReferences,
   ingestDocument,
+  ingestDocumentFromUrl,
   nowIso,
   persistProjects,
   projectForResponse,
   quoteRule,
   reviewProject,
   searchCatalog,
+  smokeTestVertex,
   sponsorEmail,
   state,
   syncRevCatalog,
@@ -63,6 +66,122 @@ export function registerRoutes(app, {
     });
   }
 
+  function demoTeamProfile() {
+    return defaultTeam({
+      name: 'Blue Orbit Demo FTC',
+      number: '9026',
+      location: 'Ashburn, Virginia',
+      experience: 'Intermediate',
+      students: 11,
+      mentors: 3,
+      budget: 1850,
+      supplier: 'REV Robotics',
+      manual: 'Current FTC manual',
+      tools: ['REV Driver Hub', 'basic hand tools', '3D printer', 'calipers', 'soldering kit', 'laptop with FTC SDK'],
+      priorities: ['reliable autonomous', 'low cost', 'simple driver control', 'easy maintenance', 'fast inspection'],
+      inventory: [
+        'REV Starter Kit V3.1',
+        'Control Hub',
+        'Expansion Hub',
+        'HD Hex Motor',
+        'UltraPlanetary Gearbox',
+        'GoBILDA mecanum wheels',
+        'REV 15mm extrusion',
+      ],
+      timelineWeeks: 6,
+      goals: 'Create a demo-ready FTC robot plan that proves strategy, CAD layout, wiring, physics, BOM, budget, Java starter code, autonomous pathing, driver practice, and sponsor materials in one walkthrough.',
+      constraints: 'Keep manufacturing approachable for students, stay under budget, avoid legality claims without citations, and keep every generated artifact inspectable during a live demo.',
+      strategyMode: 'hybrid',
+      strategyNotes: 'Balanced scoring and reliability: prefer a repeatable autonomous preload/park path, conservative scoring cycle, easy field repair, and a BOM that marks owned versus missing hardware.',
+      cadExperience: 'Beginner',
+      programmingExperience: 'Intermediate',
+      buildSpace: 'School makerspace with shared storage and two evening build sessions each week',
+    });
+  }
+
+  function demoDriverEvents() {
+    return [
+      { time: 0.2, phase: 'autonomous', gamepad: 'driver1', button: 'right_bumper' },
+      { time: 1.1, phase: 'autonomous', gamepad: 'driver1', button: 'right_trigger' },
+      { time: 2.0, phase: 'autonomous', gamepad: 'driver1', button: 'a' },
+      { time: 31.2, phase: 'teleop', gamepad: 'driver1', button: 'left_bumper' },
+      { time: 32.0, phase: 'teleop', gamepad: 'driver2', button: 'a' },
+      { time: 32.6, phase: 'teleop', gamepad: 'driver2', button: 'y' },
+      { time: 34.0, phase: 'teleop', gamepad: 'driver2', button: 'a' },
+      { time: 34.5, phase: 'teleop', gamepad: 'driver2', button: 'y' },
+      { time: 36.1, phase: 'teleop', gamepad: 'driver1', button: 'right_bumper' },
+      { time: 121.3, phase: 'endgame', gamepad: 'driver2', button: 'x' },
+      { time: 122.0, phase: 'endgame', gamepad: 'driver2', button: 'b' },
+    ];
+  }
+
+  function chatSuggestionsFor(message, project) {
+    const text = String(message || '').toLowerCase();
+    const suggestions = [];
+    if (/cheap|budget|cost|bom|price|parts/.test(text)) {
+      suggestions.push({
+        id: 'regen-bom',
+        label: 'Recalculate BOM',
+        description: 'Refresh missing/owned parts, substitutions, and budget totals for the selected design.',
+        action: 'regenerate-bom',
+      });
+      suggestions.push({
+        id: 'priority-low-cost',
+        label: 'Prioritize low cost',
+        description: 'Add low cost to team priorities and rebuild the strategy.',
+        action: 'add-priority',
+        payload: { priority: 'Low cost' },
+      });
+    }
+    if (/auto|autonomous|park|path/.test(text)) {
+      suggestions.push({
+        id: 'regen-auto',
+        label: 'Regenerate autonomous',
+        description: 'Create a fresh drivetrain-matched autonomous plan with current selected design assumptions.',
+        action: 'regenerate-autonomous',
+      });
+    }
+    if (/goal|strategy|focus|priority/.test(text)) {
+      suggestions.push({
+        id: 'set-goal-from-chat',
+        label: 'Use as project goal',
+        description: 'Save this chat request as the team goal and rebuild strategy guidance.',
+        action: 'set-goal',
+        payload: { goal: String(message || project.team.goals || '').slice(0, 220) },
+      });
+    }
+    if (/cad|wiring|blueprint|assembly/.test(text)) {
+      suggestions.push({
+        id: 'open-cad',
+        label: 'Open CAD tab',
+        description: 'Review 2D views, wiring routes, and conceptual assembly data.',
+        action: 'open-tab',
+        payload: { tab: 'CAD' },
+      });
+    }
+    return suggestions.length ? suggestions.slice(0, 4) : [
+      {
+        id: 'regen-bom',
+        label: 'Recalculate BOM',
+        description: 'Refresh budget and substitutions from the selected mechanism packet.',
+        action: 'regenerate-bom',
+      },
+      {
+        id: 'regen-auto',
+        label: 'Regenerate autonomous',
+        description: 'Refresh autonomous path and tuning constants for the selected drivetrain.',
+        action: 'regenerate-autonomous',
+      },
+      {
+        id: 'open-chat-strategy',
+        label: 'Review strategy',
+        description: 'Open the strategy tab and inspect match-phase recommendations.',
+        action: 'open-tab',
+        payload: { tab: 'Strategy' },
+      },
+    ];
+  }
+
   app.get('/api/health', (_req, res) => {
     res.json({
       ok: true,
@@ -77,8 +196,48 @@ export function registerRoutes(app, {
     res.json(aiStatus());
   });
 
+  app.post('/api/ai/smoke-test', async (_req, res, next) => {
+    try {
+      res.json(await smokeTestVertex());
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/project/demo', (_req, res) => {
     res.json(projectForResponse(demoProject));
+  });
+
+  app.post('/api/projects/demo-run', async (_req, res, next) => {
+    try {
+      const status = aiStatus();
+      const useVerifiedVertex = status.ready && Boolean(status.lastOkAt);
+      const project = await createProject({ team: demoTeamProfile() }, { skipAi: !useVerifiedVertex });
+      if (!useVerifiedVertex && status.ready) {
+        project.generatedBy = 'local-fallback';
+        project.aiFallbackReason = 'Demo run used the deterministic local generator because Vertex has not passed a smoke test in this server session.';
+      }
+      project.driverInsight = analyzeDriverLogs(demoDriverEvents());
+      project.driverAnalysis = project.driverInsight;
+      project.sponsorDraft = sponsorEmail({
+        team: project.team,
+        contactName: 'Alex Rivera',
+        companyName: 'Demo Manufacturing',
+        amount: 1000,
+      });
+      project.sponsorDesk = project.sponsorDraft;
+      project.demoScript = [
+        'Start on Dashboard and confirm the AI provider, setup readiness, selected concept, and budget.',
+        'Open Strategy, Design, BOM, Physics, CAD, Code, Autonomous, Build, Driver Logs, Grants, and Chat in that order.',
+        'Use the chat prompt "Make this cheaper and explain what changes" to show actionable suggestions.',
+      ];
+      project.status = 'demo-ready';
+      project.updatedAt = nowIso();
+      await persistProjects();
+      res.status(201).json(projectForResponse(project));
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.post('/api/projects', async (req, res, next) => {
@@ -158,6 +317,7 @@ export function registerRoutes(app, {
       project.cad = generateCadConcept(project);
       project.code = generateCode(project);
       project.codeValidation = validateGeneratedJava(project.code);
+      project.autonomousPlan = buildAutonomousPlan(project);
       project.buildGuide = project.buildGuide || buildGuide(project);
       project.legalChecklist = reviewProject(project).legalChecklist;
       project.review = reviewProject(project);
@@ -210,6 +370,32 @@ export function registerRoutes(app, {
         persistProjects();
       }
       res.status(201).json({ document: doc, project: project ? projectForResponse(project) : null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/projects/:id/documents/ingest-url', async (req, res, next) => {
+    try {
+      const project = state.projects.get(req.params.id);
+      if (!project) return res.status(404).json({ error: 'Project not found' });
+      const url = String(req.body?.url || '').trim();
+      if (!url) return res.status(400).json({ error: 'Document URL is required.' });
+      const doc = await ingestDocumentFromUrl({
+        url,
+        title: req.body?.title || null,
+        type: req.body?.type || null,
+        version: req.body?.version || null,
+        sourceDate: req.body?.sourceDate || null,
+      });
+      project.documents = Array.from(new Set([...(project.documents || []), doc.id]));
+      project.season = currentSeasonSource(project);
+      if (doc.seasonSource) project.team.manual = doc.seasonSource.title || doc.title;
+      project.review = reviewProject(project);
+      project.legalChecklist = project.review.legalChecklist;
+      project.updatedAt = nowIso();
+      persistProjects();
+      res.status(201).json({ document: doc, project: projectForResponse(project) });
     } catch (error) {
       next(error);
     }
@@ -269,6 +455,7 @@ export function registerRoutes(app, {
     project.cad = generateCadConcept(project);
     project.code = generateCode(project);
     project.codeValidation = validateGeneratedJava(project.code);
+    project.autonomousPlan = buildAutonomousPlan(project);
     project.buildGuide = buildGuide(project);
     project.legalChecklist = reviewProject(project).legalChecklist;
     project.review = reviewProject(project);
@@ -286,6 +473,27 @@ export function registerRoutes(app, {
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.bom);
+  });
+
+  app.patch('/api/projects/:id/bom/overrides', (req, res) => {
+    const project = state.projects.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const key = String(req.body?.key || '').trim();
+    if (!key) return res.status(400).json({ error: 'BOM override key is required.' });
+    const override = req.body?.override || {};
+    project.team = defaultTeam({
+      ...project.team,
+      bomOverrides: {
+        ...(project.team.bomOverrides || {}),
+        [key]: override,
+      },
+    });
+    project.bom = buildBom(project.team, project.selectedDesign);
+    project.review = reviewProject(project);
+    project.legalChecklist = project.review.legalChecklist;
+    project.updatedAt = nowIso();
+    persistProjects();
+    res.json(projectForResponse(project));
   });
 
   app.post('/api/projects/:id/calculate/mechanism', (req, res) => {
@@ -363,11 +571,28 @@ export function registerRoutes(app, {
     if (!project) return res.status(404).json({ error: 'Project not found' });
     project.code = generateCode({ ...project, codeInputs: req.body });
     project.codeValidation = validateGeneratedJava(project.code);
+    project.autonomousPlan = buildAutonomousPlan(project, req.body?.autonomous || {});
     project.review = reviewProject(project);
     project.legalChecklist = project.review.legalChecklist;
     project.updatedAt = nowIso();
     persistProjects();
     res.json(project.code);
+  });
+
+  app.post('/api/projects/:id/autonomous-plan', (req, res) => {
+    const project = state.projects.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    project.autonomousPlan = buildAutonomousPlan(project, req.body || {});
+    project.updatedAt = nowIso();
+    persistProjects();
+    res.json(project.autonomousPlan);
+  });
+
+  app.get('/api/projects/:id/autonomous-plan', (req, res) => {
+    const project = state.projects.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    project.autonomousPlan = project.autonomousPlan || buildAutonomousPlan(project);
+    res.json(project.autonomousPlan);
   });
 
   app.get('/api/projects/:id/code', (req, res) => {
@@ -508,7 +733,7 @@ export function registerRoutes(app, {
         generatedBy: 'local-command',
         command: 'goal',
         project: projectForResponse(project),
-        suggestedActions: ['Generate blueprint', 'Review strategy', 'Ask follow-up'],
+        suggestedActions: chatSuggestionsFor(goal, project),
       });
     }
 
@@ -531,8 +756,34 @@ export function registerRoutes(app, {
       citations,
       catalogHits,
       generatedBy: ai.generatedBy,
-      suggestedActions: ai.ok ? ai.data.suggestedActions || [] : ['search rules', 'recalculate mechanism', 'regenerate BOM', 'update code artifact'],
+      suggestedActions: chatSuggestionsFor(message, project),
     });
+  });
+
+  app.post('/api/projects/:id/chat/apply', (req, res) => {
+    const project = state.projects.get(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const suggestion = req.body?.suggestion || {};
+    const action = suggestion.action;
+    if (action === 'set-goal') {
+      project.team.goals = String(suggestion.payload?.goal || project.team.goals || '').slice(0, 240);
+      project.strategy = buildStrategy(project.team, project.season || currentSeasonSource(project));
+    } else if (action === 'add-priority') {
+      const priority = String(suggestion.payload?.priority || '').trim();
+      project.team.priorities = Array.from(new Set([...(project.team.priorities || []), priority].filter(Boolean)));
+      project.strategy = buildStrategy(project.team, project.season || currentSeasonSource(project));
+    } else if (action === 'regenerate-bom') {
+      project.bom = buildBom(project.team, project.selectedDesign);
+      project.review = reviewProject(project);
+      project.legalChecklist = project.review.legalChecklist;
+    } else if (action === 'regenerate-autonomous') {
+      project.autonomousPlan = buildAutonomousPlan(project);
+    } else {
+      return res.status(400).json({ error: 'Unsupported chat suggestion action.' });
+    }
+    project.updatedAt = nowIso();
+    persistProjects();
+    res.json({ applied: true, message: `${suggestion.label || 'Suggestion'} applied`, project: projectForResponse(project) });
   });
 
   app.use((error, _req, res, _next) => {

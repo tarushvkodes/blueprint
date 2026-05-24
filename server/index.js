@@ -2,10 +2,10 @@ import { createRequire } from 'node:module';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import { aiStatus, callVertexJson } from './ai.js';
+import { aiStatus, callVertexJson, smokeTestVertex } from './ai.js';
 import { loadCachedCatalog, searchCatalog, syncRevCatalog } from './catalog.js';
 import { ensureRuntimeDirs, port, uploadDir } from './config.js';
-import { ingestDefaultReferences, ingestDocument, quoteRule } from './documents.js';
+import { ingestDefaultReferences, ingestDocument, ingestDocumentFromUrl, quoteRule } from './documents.js';
 import { cadAsConceptJson, cadAsStep, cadExportName, generateCadConcept } from './generators/cad.js';
 import { generateCode } from './generators/code.js';
 import {
@@ -16,6 +16,7 @@ import {
   buildConcepts,
   buildGuide,
   buildGuideHtml,
+  buildAutonomousPlan,
   buildStrategy,
   calculateMechanisms,
   createProject,
@@ -58,6 +59,7 @@ async function refreshDemoProjectWithAi() {
   demoProject.cad = generateCadConcept(demoProject);
   demoProject.code = generateCode(demoProject);
   demoProject.codeValidation = validateGeneratedJava(demoProject.code);
+  demoProject.autonomousPlan = buildAutonomousPlan(demoProject);
   demoProject.buildGuide = buildGuide(demoProject);
   demoProject.legalChecklist = reviewProject(demoProject).legalChecklist;
   demoProject.review = reviewProject(demoProject);
@@ -77,6 +79,7 @@ registerRoutes(app, {
   buildConcepts,
   buildGuide,
   buildGuideHtml,
+  buildAutonomousPlan,
   buildStrategy,
   cadAsConceptJson,
   cadAsStep,
@@ -91,6 +94,7 @@ registerRoutes(app, {
   generateCode,
   ingestDefaultReferences,
   ingestDocument,
+  ingestDocumentFromUrl,
   nowIso,
   persistProjects,
   projectForResponse,
@@ -98,6 +102,7 @@ registerRoutes(app, {
   quoteRule,
   searchCatalog,
   sponsorEmail,
+  smokeTestVertex,
   state,
   syncRevCatalog,
   upload,

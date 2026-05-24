@@ -1,6 +1,6 @@
 import { aiStatus, callVertexJson } from '../ai.js';
 import { findCatalogPart } from '../catalog.js';
-import { quoteRule } from '../documents.js';
+import { quoteRule, sourceHealthForDocument } from '../documents.js';
 import { generateCadConcept } from './cad.js';
 import { generateCode } from './code.js';
 import {
@@ -199,6 +199,7 @@ export function defaultTeam(body = {}) {
     cadExperience: body.cadExperience ?? 'Beginner',
     programmingExperience: body.programmingExperience ?? 'Beginner',
     buildSpace: body.buildSpace ?? 'Classroom or garage build space',
+    bomOverrides: body.bomOverrides ?? {},
   };
 
   return sanitizeTeamDraft(team);
@@ -316,9 +317,110 @@ function resolveConcept(team, conceptOrId = 'balanced-cycle-machine') {
   return concepts.find((item) => item.id === conceptOrId) || concepts[1];
 }
 
+function inventoryIndex(team = {}) {
+  const map = new Map();
+  for (const raw of normalizeTextList(team.inventory)) {
+    const text = raw.trim();
+    if (!text) continue;
+    const qtyMatch = text.match(/\b(?:x|qty[:\s]*)(\d+)\b/i) || text.match(/\((\d+)\)$/);
+    const qty = qtyMatch ? Math.max(1, Number(qtyMatch[1])) : 1;
+    const sku = text.match(/REV-\d{2}-\d{4}/i)?.[0]?.toUpperCase();
+    const keys = [
+      sku,
+      text.toLowerCase(),
+      text.replace(/\b(?:x|qty[:\s]*)\d+\b/gi, '').replace(/\(\d+\)$/g, '').trim().toLowerCase(),
+    ].filter(Boolean);
+    for (const key of keys) {
+      map.set(key, Math.max(map.get(key) || 0, qty));
+    }
+  }
+  return map;
+}
+
+function ownedQuantityForLine(line, product, inventory) {
+  const sku = (product.sku || line.query.match(/REV-\d{2}-\d{4}/)?.[0] || '').toUpperCase();
+  const lineText = `${product.name || ''} ${line.query || ''} ${line.part || ''}`.toLowerCase();
+  const keys = [
+    sku,
+    product.name?.toLowerCase(),
+    line.query?.toLowerCase(),
+    line.part?.toLowerCase(),
+  ].filter(Boolean);
+  let ownedQty = Math.max(...keys.map((key) => inventory.get(key) || 0), 0);
+  for (const [key, qty] of inventory.entries()) {
+    if (key.length >= 6 && (lineText.includes(key) || key.includes(String(product.name || line.query).toLowerCase()))) {
+      ownedQty = Math.max(ownedQty, qty);
+    }
+  }
+  return Math.min(line.qty, ownedQty);
+}
+
+function fallbackPriceForLine(line) {
+  if (line.subsystem === 'Control') return 285;
+  if (line.subsystem === 'Drivetrain') return /wheel|mecanum/i.test(line.query) ? 95 : 45;
+  if (line.subsystem === 'Scoring') return /linear/i.test(line.query) ? 85 : 45;
+  if (line.subsystem === 'Sensors') return 40;
+  if (line.subsystem === 'Electrical') return 12;
+  return 30;
+}
+
+function substitutionSuggestions(line, item, team) {
+  const suggestions = [];
+  if (item.missingQty <= 0) return suggestions;
+  if (/mecanum/i.test(line.query)) {
+    suggestions.push({ label: 'Use tank drivetrain starter wheels', impact: 'Lowers cost and complexity but loses strafing.', query: 'FTC Starter Kit V3.1 REV-45-3529' });
+  }
+  if (/linear|slide/i.test(line.query)) {
+    suggestions.push({ label: 'Use single-stage arm or shorter slide', impact: 'Reduces cost and build risk with lower reach.', query: 'Smart Robot Servo REV-41-1097' });
+  }
+  if (/camera|vision|webcam/i.test(line.query)) {
+    suggestions.push({ label: 'Delay vision until drivetrain and scoring are stable', impact: 'Saves money early and keeps autonomous encoder-first.', query: 'encoder autonomous fallback' });
+  }
+  if (team.budget < 1000 && item.required !== true) {
+    suggestions.push({ label: 'Defer optional item', impact: 'Keeps the first robot inside an ultra-low budget.', query: null });
+  }
+  return suggestions.slice(0, 2);
+}
+
+function summarizeBom(items, team) {
+  const subsystemTotals = Object.values(items.reduce((acc, item) => {
+    const current = acc[item.subsystem] || { subsystem: item.subsystem, total: 0, requiredTotal: 0, optionalTotal: 0, missingTotal: 0 };
+    current.total += item.total;
+    current.requiredTotal += item.required ? item.total : 0;
+    current.optionalTotal += item.required ? 0 : item.total;
+    current.missingTotal += item.missingTotal;
+    acc[item.subsystem] = current;
+    return acc;
+  }, {})).map((row) => ({
+    ...row,
+    total: Number(row.total.toFixed(2)),
+    requiredTotal: Number(row.requiredTotal.toFixed(2)),
+    optionalTotal: Number(row.optionalTotal.toFixed(2)),
+    missingTotal: Number(row.missingTotal.toFixed(2)),
+  }));
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const missingSubtotal = items.reduce((sum, item) => sum + item.missingTotal, 0);
+  const ownedValue = items.reduce((sum, item) => sum + item.ownedTotal, 0);
+  const shippingEstimatePlaceholder = Math.max(35, Math.round(missingSubtotal * 0.06));
+  const estimatedCheckoutTotal = missingSubtotal + shippingEstimatePlaceholder;
+  const budgetRemaining = Number((team.budget - estimatedCheckoutTotal).toFixed(2));
+
+  return {
+    subtotal: Number(subtotal.toFixed(2)),
+    missingSubtotal: Number(missingSubtotal.toFixed(2)),
+    ownedValue: Number(ownedValue.toFixed(2)),
+    shippingEstimatePlaceholder,
+    estimatedCheckoutTotal: Number(estimatedCheckoutTotal.toFixed(2)),
+    budgetRemaining,
+    budgetMode: team.budget < 1000 ? 'Ultra-Low Budget' : team.budget < 1800 ? 'Balanced Budget' : 'Competitive Budget',
+    subsystemTotals,
+  };
+}
+
 export function buildBom(team, conceptOrId = 'balanced-cycle-machine') {
   const concept = resolveConcept(team, conceptOrId);
   const specs = getMechanismSpecs(concept, team, currentSeasonSource());
+  const inventory = inventoryIndex(team);
   const mergedParts = new Map();
   for (const line of mechanismHardwareLines(specs)) {
     if (line.qty <= 0) continue;
@@ -339,26 +441,43 @@ export function buildBom(team, conceptOrId = 'balanced-cycle-machine') {
   const parts = Array.from(mergedParts.values());
   const items = parts.map((line) => {
     const product = findCatalogPart(line.query) || {};
-    const price = Number(product.price || (line.subsystem === 'Control' ? 285 : line.subsystem === 'Drivetrain' ? 45 : 30));
     const sku = product.sku || line.query.match(/REV-\d{2}-\d{4}/)?.[0] || 'SKU pending';
-    const inventoryText = normalizeTextList(team.inventory).join(' ').toLowerCase();
-    const owned = inventoryText.includes(sku.toLowerCase()) || inventoryText.includes(String(product.name || line.query).toLowerCase());
-    return {
+    const override = team.bomOverrides?.[sku] || team.bomOverrides?.[line.query] || team.bomOverrides?.[line.mechanismId] || {};
+    const overrideQty = Number(override.qty);
+    const overridePrice = Number(override.price);
+    const qty = Number.isFinite(overrideQty) ? overrideQty : line.qty;
+    const price = Number.isFinite(overridePrice) ? overridePrice : Number(product.price || fallbackPriceForLine(line));
+    const ownedQty = ownedQuantityForLine({ ...line, qty }, product, inventory);
+    const missingQty = Math.max(0, qty - ownedQty);
+    const item = {
       ...line,
       supplier: 'REV Robotics',
       sku,
       part: product.name || line.query,
+      qty,
       price,
-      total: price * line.qty,
+      total: price * qty,
+      ownedQty,
+      missingQty,
+      ownedTotal: price * ownedQty,
+      missingTotal: price * missingQty,
       productUrl: product.productUrl || null,
       cadUrl: product.cadUrl || null,
       stock: product.stockStatus || 'Availability not checked',
       lastChecked: product.lastChecked || null,
-      inInventory: owned,
-      substitutionSuggestions: [],
+      inInventory: ownedQty >= line.qty,
+      needsPurchase: missingQty > 0,
+      budgetCategory: line.required ? 'required' : 'optional',
+      overrideNote: override.note || null,
+      overridden: Boolean(Number.isFinite(overrideQty) || Number.isFinite(overridePrice) || override.note),
+    };
+    return {
+      ...item,
+      substitutionSuggestions: substitutionSuggestions(line, item, team),
     };
   });
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const budget = summarizeBom(items, team);
+  const sortedItems = [...items].sort((a, b) => a.buyFirst - b.buyFirst || Number(b.required) - Number(a.required));
   return {
     conceptId: concept.id || String(conceptOrId),
     conceptName: concept.name,
@@ -366,12 +485,15 @@ export function buildBom(team, conceptOrId = 'balanced-cycle-machine') {
     optional: items.filter((item) => !item.required),
     spareParts: items.filter((item) => /motor|cable|wheel/i.test(item.part)).map((item) => ({ ...item, qty: 1, total: item.price })),
     alreadyOwned: items.filter((item) => item.inInventory),
-    missing: items.filter((item) => !item.inInventory),
-    subtotal,
-    shippingEstimatePlaceholder: Math.max(35, Math.round(subtotal * 0.06)),
-    budgetRemaining: team.budget - subtotal,
-    buyFirst: items.sort((a, b) => a.buyFirst - b.buyFirst).slice(0, 4),
-    budgetMode: team.budget < 1000 ? 'Ultra-Low Budget' : team.budget < 1800 ? 'Balanced Budget' : 'Competitive Budget',
+    missing: items.filter((item) => item.needsPurchase),
+    substitutions: items.flatMap((item) => item.substitutionSuggestions.map((suggestion) => ({
+      ...suggestion,
+      sku: item.sku,
+      part: item.part,
+      mechanismIds: item.mechanismIds,
+    }))),
+    buyFirst: sortedItems.filter((item) => item.needsPurchase).slice(0, 4),
+    ...budget,
   };
 }
 
@@ -410,6 +532,29 @@ export function calculateMechanisms({ design = {}, robot = {} } = {}) {
   const servoTorqueNm = 1.8;
   const intakeRequiredTorque = intakeLoadMass * 9.81 * intakeRollerRadius * intakeSafetyFactor;
   const intakeMargin = servoTorqueNm / intakeRequiredTorque;
+  const motorCount = specs.reduce((sum, spec) => sum + (spec.hardware || [])
+    .filter((item) => item.kind === 'motor')
+    .reduce((lineSum, item) => lineSum + Number(item.quantity || 1), 0), 0);
+  const driveMotorCount = (drivetrain?.hardware || [])
+    .filter((item) => item.kind === 'motor')
+    .reduce((sum, item) => sum + Number(item.quantity || 1), 0) || 2;
+  const manipulatorMotorCount = (manipulator?.hardware || [])
+    .filter((item) => item.kind === 'motor')
+    .reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+  const intakeMotorCount = (intake?.hardware || [])
+    .filter((item) => item.kind === 'motor')
+    .reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+  const estimatedDriveCurrent = driveMotorCount * Math.min(18, Math.max(6, forceAtWheel / 8));
+  const estimatedMechanismCurrent = manipulatorMotorCount * 12 + intakeMotorCount * 6;
+  const estimatedPeakCurrent = estimatedDriveCurrent + estimatedMechanismCurrent + 3;
+  const batteryLoad = estimatedPeakCurrent / 20;
+  const robotMassKg = Number(robot.massKg || 15);
+  const frameWidthMeters = Number(robot.frameWidthMeters || drivetrain?.cad?.envelopeMm?.x / 1000 || 0.455);
+  const baseCgHeightMeters = Number(robot.baseCgHeightMeters || 0.12);
+  const manipulatorHeightMeters = Number(robot.manipulatorHeightMeters || manipulator?.cad?.envelopeMm?.z / 1000 || 0.36);
+  const raisedCgHeight = (robotMassKg * baseCgHeightMeters + loadMass * manipulatorHeightMeters) / (robotMassKg + loadMass);
+  const halfTrack = frameWidthMeters / 2;
+  const staticTipAngle = Math.atan2(halfTrack, raisedCgHeight) * (180 / Math.PI);
   return [
     {
       mechanismId: drivetrain?.id || 'drivetrain',
@@ -434,6 +579,23 @@ export function calculateMechanisms({ design = {}, robot = {} } = {}) {
       warning: null,
     },
     {
+      mechanismId: drivetrain?.id || 'drivetrain',
+      mechanism: 'Battery and current load',
+      assumptions: {
+        motorCount,
+        driveMotorCount,
+        manipulatorMotorCount,
+        intakeMotorCount,
+        estimatedDriveCurrent: Number(estimatedDriveCurrent.toFixed(1)),
+      },
+      formula: 'peak_current = drive_current + manipulator_current + intake_current + control_overhead',
+      calculation: `${estimatedDriveCurrent.toFixed(1)} A drive + ${estimatedMechanismCurrent.toFixed(1)} A mechanisms + 3.0 A controls`,
+      result: `${estimatedPeakCurrent.toFixed(1)} A estimated peak, ${(batteryLoad * 100).toFixed(0)}% of a 20 A conservative budget`,
+      safetyFactor: batteryLoad < 1 ? 'OK' : 'High',
+      recommendation: batteryLoad < 1 ? 'Run with a fresh battery and watch telemetry during pushing.' : 'Reduce drive cap, stagger mechanisms, or add current limits before match use.',
+      warning: batteryLoad > 1 ? 'Estimated peak current may brown out the robot under pushing or lift load.' : null,
+    },
+    {
       mechanismId: manipulator?.id || 'manipulator',
       mechanism: `${manipulator?.name || 'Linear lift'} torque`,
       assumptions: { loadMass, pulleyRadius, safetyFactor, availableLiftTorque: Number(availableLiftTorque.toFixed(2)) },
@@ -454,6 +616,23 @@ export function calculateMechanisms({ design = {}, robot = {} } = {}) {
       safetyFactor: safetyFactor.toFixed(1),
       recommendation: 'Limit servo travel and avoid hard stops.',
       warning: null,
+    },
+    {
+      mechanismId: manipulator?.id || 'manipulator',
+      mechanism: 'Center of gravity and tipping risk',
+      assumptions: {
+        robotMassKg,
+        loadMass,
+        frameWidthMeters,
+        baseCgHeightMeters,
+        manipulatorHeightMeters,
+      },
+      formula: 'tip_angle = atan((track_width / 2) / raised_center_of_gravity)',
+      calculation: `atan(${halfTrack.toFixed(3)} m / ${raisedCgHeight.toFixed(3)} m)`,
+      result: `${staticTipAngle.toFixed(1)} degree static tip angle estimate with mechanism raised`,
+      safetyFactor: staticTipAngle > 45 ? 'Conservative' : 'Review',
+      recommendation: staticTipAngle > 45 ? 'Keep heavy electronics low and test hard braking with the mechanism raised.' : 'Lower the mechanism mass, widen stance if legal, or reduce raised driving speed.',
+      warning: staticTipAngle < 45 ? 'Raised mechanism may tip during fast turns or defense.' : null,
     },
     {
       mechanismId: intake?.id || 'intake',
@@ -481,15 +660,89 @@ export function buildGuide(project) {
   const drivetrain = specs.find((spec) => spec.type === 'drivetrain');
   const intake = specs.find((spec) => spec.type === 'intake');
   const manipulator = specs.find((spec) => spec.type === 'manipulator');
+  const sensors = specs.find((spec) => spec.type === 'sensor');
   const control = specs.find((spec) => spec.type === 'control');
-  return [
-    { mechanismId: null, phase: 'Prepare parts', title: 'Confirm manual, BOM, and inventory', parts: [], tools: ['laptop'], time: '30 min', diagram: 'BOM -> bins -> legal checklist', instructions: 'Open the current manual, confirm team inventory, mark already-owned REV parts, and print the legal/rules checklist.', checkpoint: 'Budget remaining is non-negative or substitutions are chosen.', commonMistake: 'Ordering mechanisms before confirming control system parts.', test: 'A student can point to the manual version and every buy-first part.' },
-    { mechanismId: drivetrain?.id, phase: 'Build drivetrain', title: `Assemble ${drivetrain?.name || selected?.name || 'selected drivetrain'}`, parts: drivetrain?.hardware?.map((item) => item.name) || ['motors', 'wheels', 'channel', 'fasteners'], tools: ['hex drivers', 'wrenches'], time: '2-4 hr', diagram: `Top view: ${drivetrain?.cad?.placement || 'base'}, four wheels, motors inside frame`, instructions: `Build the chassis square on a flat surface, tighten gradually, and verify ${drivetrain?.name || 'drivetrain'} wheels spin freely.`, checkpoint: 'Robot rolls straight with no binding.', commonMistake: drivetrain?.risks?.[0] || 'Mirroring mecanum wheels incorrectly.', test: 'Push the robot by hand; each wheel spins freely and the frame does not rack.' },
-    { mechanismId: control?.id, phase: 'Wire drivetrain', title: 'Mount Control Hub and battery safely', parts: control?.hardware?.map((item) => item.name) || ['Control Hub', 'battery', 'switch', 'XT30 cables'], tools: ['wire clips', 'zip ties'], time: '1 hr', diagram: control?.cad?.placement || 'Rear electronics bay with strain-relieved cables', instructions: 'Route wires away from moving parts, strain-relieve connectors, and label each motor cable.', checkpoint: 'Robot can be disabled quickly and no wires drag.', commonMistake: 'Leaving battery unsecured.', test: 'Lift and gently shake the robot; battery and hub remain fixed.' },
-    { mechanismId: manipulator?.id, phase: 'Build scoring mechanism', title: `Bench-test ${manipulator?.name || 'lift'} and ${intake?.name || 'intake'} before mounting`, parts: [...(manipulator?.hardware?.map((item) => item.name) || []), ...(intake?.hardware?.map((item) => item.name) || [])], tools: ['hex drivers'], time: '3-6 hr', diagram: `Side view: ${manipulator?.cad?.placement || 'scoring tower'} braced to base`, instructions: 'Assemble the mechanism outside the robot, check current draw, then mount with accessible fasteners.', checkpoint: 'Mechanism moves through full range without binding.', commonMistake: manipulator?.risks?.[0] || 'Ignoring cable path through the lift travel.', test: 'Run the mechanism at low power for 10 cycles and check for heat or binding.' },
-    { mechanismId: control?.id, phase: 'Upload code', title: `Configure hardware map for ${control?.name || 'TeleOp'}`, parts: [], tools: ['Android Studio', 'Driver Station'], time: '45 min', diagram: 'Laptop -> Robot Controller -> Driver Station', instructions: `Use generated case-sensitive config names for ${specs.flatMap((spec) => spec.code?.hardwareNames || []).join(', ')}, run TeleOp on blocks, and reverse motors only after checking wiring.`, checkpoint: 'Forward stick drives forward and slow mode works.', commonMistake: 'Changing config names without updating code.', test: 'Forward stick drives forward, turn stick turns, and stop disables all motors.' },
-    { mechanismId: control?.id, phase: 'Tune autonomous', title: `Tune ${control?.architecture || 'autonomous'} constants and repeatability`, parts: [], tools: ['field tiles', 'tape measure'], time: '2 hr', diagram: 'Field tile path with start, score, park markers', instructions: 'Measure wheel diameter, tune encoder constants, and run 10 consecutive autonomous trials.', checkpoint: 'Robot succeeds at least 8 of 10 times before adding complexity.', commonMistake: 'Testing only on a full battery.', test: 'Record 10 runs and keep the simplest path that succeeds reliably.' },
-  ].map((step) => ({ ...step, generatedBy: project.generatedBy || 'local-fallback' }));
+  const hardwareNames = specs.flatMap((spec) => spec.code?.hardwareNames || []);
+  const steps = [
+    { mechanismId: null, phase: 'Prepare parts', title: 'Confirm manual, BOM, and inventory', parts: [], tools: ['laptop'], time: '30 min', diagram: 'BOM -> bins -> legal checklist', instructions: 'Open the current manual, confirm team inventory, mark already-owned REV parts, and print the legal/rules checklist.', safetyWarning: 'Do not cut, drill, or order final parts until the current official manual and inspection checklist are indexed.', checkpoint: 'Budget remaining is non-negative or substitutions are chosen.', commonMistake: 'Ordering mechanisms before confirming control system parts.', test: 'A student can point to the manual version and every buy-first part.' },
+    { mechanismId: drivetrain?.id, phase: 'Build drivetrain', title: `Square the ${drivetrain?.name || selected?.name || 'selected drivetrain'} base`, parts: drivetrain?.hardware?.map((item) => item.name) || ['motors', 'wheels', 'channel', 'fasteners'], tools: ['hex drivers', 'wrenches', 'square'], time: '2-4 hr', diagram: `Top view: ${drivetrain?.cad?.placement || 'base'}, four wheels, motors inside frame`, instructions: `Build the chassis square on a flat surface, tighten gradually, and verify ${drivetrain?.name || 'drivetrain'} wheels spin freely before adding mechanisms.`, safetyWarning: 'Keep fingers clear of wheels and gears during powered tests.', checkpoint: 'Robot rolls straight with no binding.', commonMistake: drivetrain?.risks?.[0] || 'Mirroring mecanum wheels incorrectly.', test: 'Push the robot by hand; each wheel spins freely and the frame does not rack.' },
+    { mechanismId: control?.id, phase: 'Wire drivetrain', title: 'Mount Control Hub, battery, switch, and drive wiring', parts: control?.hardware?.map((item) => item.name) || ['Control Hub', 'battery', 'switch', 'XT30 cables'], tools: ['wire clips', 'zip ties', 'label maker'], time: '1 hr', diagram: control?.cad?.placement || 'Rear electronics bay with strain-relieved cables', instructions: 'Route wires away from moving parts, strain-relieve connectors, label each motor cable, and leave service loops for inspection access.', safetyWarning: 'Battery must be strapped down and reachable for quick disconnect.', checkpoint: 'Robot can be disabled quickly and no wires drag.', commonMistake: 'Leaving battery unsecured or routing wires through wheel paths.', test: 'Lift and gently shake the robot; battery, switch, and hub remain fixed.' },
+    { mechanismId: drivetrain?.id, phase: 'Test drivetrain', title: 'Run the drive base on blocks first', parts: drivetrain?.hardware?.map((item) => item.name) || ['drive motors', 'wheels'], tools: ['Driver Station', 'robot blocks'], time: '30 min', diagram: 'Robot on blocks -> forward, reverse, turn, strafe if mecanum', instructions: 'Run TeleOp with wheels off the floor, check each motor direction, then test slow mode and a short straight drive on tiles.', safetyWarning: 'Never stand in front of the robot during first powered motion.', checkpoint: 'Forward stick drives forward and stop disables all motors.', commonMistake: 'Fixing reversed motion in code before checking motor wiring and wheel orientation.', test: 'Drive 8 ft forward and back; robot stays controllable and wires remain clear.' },
+    { mechanismId: intake?.id, phase: 'Build intake', title: `Bench-build ${intake?.name || 'intake'} as a removable module`, parts: intake?.hardware?.map((item) => item.name) || ['servo', 'roller', 'brackets'], tools: ['hex drivers', 'calipers'], time: '1-3 hr', diagram: `Front view: ${intake?.cad?.placement || 'front intake'} with serviceable fasteners`, instructions: 'Assemble the intake off-robot, verify roller direction or servo travel, then mount with two accessible fastener groups so students can remove it between matches.', safetyWarning: 'Start with low motor power and avoid pinch points near rollers.', checkpoint: 'Game piece enters smoothly without dragging the drivetrain.', commonMistake: intake?.risks?.[0] || 'Over-compressing the game piece and stalling the roller.', test: 'Run 10 intake/outtake cycles and check for heat, jams, and loose fasteners.' },
+    { mechanismId: manipulator?.id, phase: 'Build scoring mechanism', title: `Assemble and brace ${manipulator?.name || 'lift or arm'}`, parts: manipulator?.hardware?.map((item) => item.name) || ['slide or arm parts', 'motor', 'gears'], tools: ['hex drivers', 'threadlocker where allowed'], time: '3-6 hr', diagram: `Side view: ${manipulator?.cad?.placement || 'scoring tower'} braced to base`, instructions: 'Assemble the mechanism outside the robot, check travel by hand, then mount with bracing back into the drivetrain rails.', safetyWarning: 'Support lifts and arms while powered off; do not rely on motor holding torque as a safety support.', checkpoint: 'Mechanism moves through full range without binding.', commonMistake: manipulator?.risks?.[0] || 'Ignoring cable path through the lift travel.', test: 'Run the mechanism at low power for 10 cycles and check for heat, belt slip, or binding.' },
+    { mechanismId: sensors?.id || control?.id, phase: 'Add sensors', title: `Install ${sensors?.name || 'driver and autonomous sensors'}`, parts: sensors?.hardware?.map((item) => item.name) || ['distance sensor', 'camera or odometry as available'], tools: ['small hex drivers', 'USB cable clips'], time: '45 min', diagram: sensors?.cad?.placement || 'Protected sensor mounts with clear sight lines', instructions: 'Mount sensors where wires are strain-relieved, sight lines are clear, and bumpers or mechanisms will not block readings.', safetyWarning: 'Secure USB and sensor cables before driving; loose cables can wrap into wheels.', checkpoint: 'Telemetry reports stable sensor values while the robot is still.', commonMistake: 'Mounting cameras or distance sensors where the intake blocks the target.', test: 'Move a field object in front of the sensor and confirm telemetry changes predictably.' },
+    { mechanismId: control?.id, phase: 'Upload code', title: `Configure hardware map for ${control?.name || 'TeleOp'}`, parts: [], tools: ['Android Studio', 'Driver Station'], time: '45 min', diagram: 'Laptop -> Robot Controller -> Driver Station', instructions: `Use generated case-sensitive config names for ${hardwareNames.join(', ')}, run TeleOp on blocks, and reverse motors only after checking wiring.`, safetyWarning: 'Keep the robot on blocks for the first upload and have a student ready to disable.', checkpoint: 'Forward stick drives forward, slow mode works, and intake/lift buttons match the checklist.', commonMistake: 'Changing Driver Station names without updating RobotHardware.java.', test: 'Forward stick drives forward, turn stick turns, and stop disables all motors.' },
+    { mechanismId: manipulator?.id, phase: 'Tune scoring', title: 'Set presets, current limits, and driver handoff', parts: [...(manipulator?.hardware?.map((item) => item.name) || []), ...(intake?.hardware?.map((item) => item.name) || [])], tools: ['Driver Station', 'spare battery', 'field element'], time: '1-2 hr', diagram: 'Driver 2 controls -> intake -> preset -> score -> reset', instructions: 'Tune low and high presets with a charged battery, then assign driver 1 and driver 2 responsibilities for every scoring action.', safetyWarning: 'Stop immediately if a motor stalls, belt skips, or a servo hits a hard stop.', checkpoint: 'Drivers can score and reset without asking the pit crew which button to press.', commonMistake: 'Tuning presets on a weak battery and missing positions at competition.', test: 'Complete 5 full score-and-reset cycles with the same button sequence.' },
+    { mechanismId: control?.id, phase: 'Tune autonomous', title: `Tune ${control?.architecture || 'autonomous'} constants and repeatability`, parts: [], tools: ['field tiles', 'tape measure', 'fresh battery'], time: '2 hr', diagram: 'Field tile path with start, score, park markers', instructions: 'Measure wheel diameter, tune encoder constants, and run 10 consecutive autonomous trials before adding extra actions.', safetyWarning: 'Leave space around the field path and disable the robot between changes.', checkpoint: 'Robot succeeds at least 8 of 10 times before adding complexity.', commonMistake: 'Testing only on a full battery or only from one starting tile.', test: 'Record 10 runs and keep the simplest path that succeeds reliably.' },
+    { mechanismId: null, phase: 'Inspection and driver practice', title: 'Run final inspection, maintenance, and practice loop', parts: ['inspection checklist', 'spare fasteners', 'charged batteries'], tools: ['laptop', 'battery checker', 'pit checklist'], time: '2-4 hr', diagram: 'Inspect -> drive practice -> repair notes -> retest', instructions: 'Walk through the inspection checklist, tighten fasteners, check spare parts, and schedule driver practice with logged failure notes.', safetyWarning: 'Mentor or coach review is required before competition use.', checkpoint: 'Students can explain every mechanism, rule citation, and emergency stop path.', commonMistake: 'Skipping driver practice after the robot finally works.', test: 'Run a mock match and write down the top three fixes before the next build session.' },
+  ];
+  return steps.map((step) => ({ ...step, generatedBy: project.generatedBy || 'local-fallback' }));
+}
+
+export function buildAutonomousPlan(project, inputs = {}) {
+  const selected = project.selectedDesign || project.concepts?.[1];
+  const specs = getMechanismSpecs(selected, project.team, project.season);
+  const drivetrain = specs.find((spec) => spec.type === 'drivetrain');
+  const intake = specs.find((spec) => spec.type === 'intake');
+  const manipulator = specs.find((spec) => spec.type === 'manipulator');
+  const control = specs.find((spec) => spec.type === 'control');
+  const driveMode = drivetrain?.code?.driveMode || 'mecanum';
+  const sensors = [
+    ...(control?.architecture === 'vision-auto' ? ['webcam', 'encoder fallback'] : ['drive encoders']),
+    ...(inputs.sensors || []),
+  ];
+  const desiredAction = inputs.desiredAction || (project.team?.experience === 'Beginner' ? 'park reliably' : 'score preload then park');
+  const reliability = inputs.reliability || (project.team?.experience === 'Advanced' ? 'balanced' : 'high reliability');
+  const path = [
+    { order: 1, action: 'Reset encoders and close intake gate', durationMs: 250, fallback: 'time-based wait if encoders fail' },
+    { order: 2, action: 'Drive off start line', distanceMm: driveMode === 'mecanum' ? 610 : 560, headingDeg: 0, fallback: '0.35 power for 750 ms' },
+    ...(desiredAction.includes('score')
+      ? [{ order: 3, action: `Raise ${manipulator?.name || 'scoring mechanism'} to low preset`, durationMs: 900, fallback: 'skip scoring if lift stalls' }]
+      : []),
+    ...(desiredAction.includes('score')
+      ? [{ order: 4, action: `Release with ${intake?.name || 'intake'}`, durationMs: 300, fallback: 'open servo gate only' }]
+      : []),
+    { order: desiredAction.includes('score') ? 5 : 3, action: driveMode === 'mecanum' ? 'Strafe or arc into parking zone' : 'Turn then drive into parking zone', distanceMm: 420, headingDeg: driveMode === 'mecanum' ? 0 : 18, fallback: 'simple forward park' },
+    { order: desiredAction.includes('score') ? 6 : 4, action: 'Stop all motors and hold safe state', durationMs: 100, fallback: 'disable if motion is unexpected' },
+  ];
+
+  return {
+    drivetrain: drivetrain?.architecture || driveMode,
+    reliability,
+    startPosition: inputs.startPosition || 'audience-side tile',
+    alliance: inputs.alliance || 'configurable red or blue',
+    desiredAction,
+    sensors: Array.from(new Set(sensors)),
+    path,
+    pseudocode: [
+      'initialize hardware and telemetry',
+      'reset drivetrain encoders',
+      'confirm battery voltage before start',
+      ...path.map((step) => step.action.toLowerCase()),
+      'record success/failure after each run',
+    ],
+    tuningConstants: {
+      wheelDiameterMm: Number((drivetrain?.physicsInputs?.wheelDiameterMeters || 0.096) * 1000),
+      gearRatio: drivetrain?.physicsInputs?.gearRatio || 1,
+      drivePower: 0.35,
+      turnPower: 0.28,
+      encoderToleranceTicks: 35,
+      trackWidthMm: drivetrain?.cad?.envelopeMm?.x || 455,
+    },
+    testingPlan: [
+      'Run each path step alone with wheels on blocks.',
+      'Measure actual distance after a 610 mm command and update wheel diameter or ticks-per-mm.',
+      'Run 10 full autonomous trials on a charged battery.',
+      'Keep the simplest version that succeeds at least 8 of 10 times.',
+    ],
+    warnings: [
+      'Retune if wheel diameter, gear ratio, track width, robot weight, battery voltage, or floor traction changes.',
+      'Do not add scoring actions until the park path is repeatable.',
+      control?.architecture === 'vision-auto'
+        ? 'Vision should assist alignment but encoder/time fallback must still work.'
+        : 'Encoder-only paths drift; recheck on the real field surface.',
+    ],
+  };
 }
 
 export function buildGuideHtml(project) {
@@ -501,8 +754,10 @@ export function buildGuideHtml(project) {
         <p class="kicker">Step ${index + 1} · ${step.phase}</p>
         <h2>${step.title || step.phase}</h2>
         <p>${step.instructions}</p>
+        <p><strong>Estimated time:</strong> ${step.time || 'Team estimate'}</p>
         <p><strong>Parts:</strong> ${(step.parts || []).join(', ') || 'Project BOM items'}</p>
         <p><strong>Tools:</strong> ${(step.tools || []).join(', ') || 'Basic FTC tools'}</p>
+        <p><strong>Safety:</strong> ${step.safetyWarning || 'Stop and ask for mentor review if anything binds, overheats, or looks unsafe.'}</p>
         <p><strong>Checkpoint:</strong> ${step.checkpoint || 'Mentor/student review before continuing.'}</p>
         <p><strong>Common mistake:</strong> ${step.commonMistake || 'Skipping fit checks before tightening hardware.'}</p>
         <p><strong>Test before continuing:</strong> ${step.test || 'Confirm the subsystem moves freely and remains inside legal limits.'}</p>
@@ -530,26 +785,158 @@ export function buildGuideHtml(project) {
 </html>`;
 }
 
+function parseCsvRows(text) {
+  const rows = String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!rows.length) return [];
+  const split = (line) => line.split(/,|\t/).map((cell) => cell.trim());
+  const first = split(rows[0]);
+  const hasHeader = first.some((cell) => /time|timestamp|button|control|input|driver|gamepad|phase|value|action/i.test(cell));
+  const headers = hasHeader ? first.map((cell) => cell.toLowerCase()) : [];
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  return dataRows.map((line) => {
+    const cells = split(line);
+    if (!hasHeader) return { raw: line };
+    return Object.fromEntries(headers.map((header, index) => [header, cells[index] || '']));
+  });
+}
+
+function parseDriverEvents(logs = []) {
+  if (Array.isArray(logs)) return logs;
+  const text = String(logs || '').trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed.events)) return parsed.events;
+  } catch {
+    // Fall through to CSV/plain text parsing.
+  }
+  return parseCsvRows(text);
+}
+
+function eventTime(event, index) {
+  const raw = event.timestamp ?? event.time ?? event.t ?? event.seconds ?? index;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return numeric > 10_000 ? numeric / 1000 : numeric;
+  const date = Date.parse(raw);
+  return Number.isFinite(date) ? date / 1000 : index;
+}
+
+function eventText(event) {
+  return Array.isArray(event) ? event.join(' ') : JSON.stringify(event);
+}
+
+function normalizeControlName(value = '') {
+  return String(value)
+    .replace(/^gamepad([12])\./i, 'd$1_')
+    .replace(/\s+/g, '_')
+    .toLowerCase();
+}
+
+function controlsFromEvent(event) {
+  const explicit = event.button ?? event.control ?? event.input ?? event.controlName ?? event.action;
+  if (explicit) return [normalizeControlName(explicit)];
+  const text = eventText(event);
+  return Array.from(new Set((text.match(/\b(gamepad[12]\.)?(?:a|b|x|y|left_bumper|right_bumper|left_trigger|right_trigger|left_stick|right_stick|dpad_[a-z]+)\b/gi) || [])
+    .map(normalizeControlName)));
+}
+
+function eventDriver(event, control = '') {
+  const explicit = String(event.driver ?? event.gamepad ?? '').toLowerCase();
+  if (/2|driver2|gamepad2/.test(explicit) || control.startsWith('d2_')) return 'driver2';
+  return 'driver1';
+}
+
+function eventPhase(event, timeSeconds) {
+  const phase = String(event.phase ?? event.matchPhase ?? '').trim().toLowerCase();
+  if (phase) return phase;
+  if (timeSeconds <= 30) return 'autonomous';
+  if (timeSeconds >= 120) return 'endgame';
+  return 'teleop';
+}
+
+function percentile(values, ratio) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * ratio))];
+}
+
 export function analyzeDriverLogs(logs = []) {
-  const events = Array.isArray(logs) ? logs : String(logs).split(/\n/).map((line) => line.split(','));
+  const parsedEvents = parseDriverEvents(logs)
+    .map((event, index) => ({
+      source: event,
+      time: eventTime(event, index),
+      controls: controlsFromEvent(event),
+    }))
+    .filter((event) => event.controls.length)
+    .sort((a, b) => a.time - b.time);
   const counts = new Map();
-  for (const event of events) {
-    const text = Array.isArray(event) ? event.join(' ') : JSON.stringify(event);
-    for (const token of text.match(/\b(gamepad[12]\.)?[abxy]|left_bumper|right_bumper|left_trigger|right_trigger|dpad_[a-z]+\b/gi) || []) {
-      counts.set(token.toLowerCase(), (counts.get(token.toLowerCase()) || 0) + 1);
+  const phaseCounts = new Map();
+  const driverCounts = { driver1: 0, driver2: 0 };
+  const transitions = new Map();
+  const gaps = [];
+
+  for (let index = 0; index < parsedEvents.length; index += 1) {
+    const event = parsedEvents[index];
+    const next = parsedEvents[index + 1];
+    for (const control of event.controls) {
+      const driver = eventDriver(event.source, control);
+      const phase = eventPhase(event.source, event.time);
+      counts.set(control, (counts.get(control) || 0) + 1);
+      phaseCounts.set(phase, (phaseCounts.get(phase) || 0) + 1);
+      driverCounts[driver] += 1;
+      if (next) {
+        const gap = Math.max(0, next.time - event.time);
+        gaps.push(gap);
+        if (gap <= 1.2) {
+          for (const nextControl of next.controls) {
+            if (nextControl !== control) {
+              const key = `${control} -> ${nextControl}`;
+              transitions.set(key, (transitions.get(key) || 0) + 1);
+            }
+          }
+        }
+      }
     }
   }
-  const hot = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  const hot = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const repeatedSequences = Array.from(transitions.entries())
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([sequence, count]) => ({
+      sequence: sequence.split(' -> '),
+      count,
+      recommendation: `Consider binding ${sequence.replace(' -> ', ' then ')} as a single macro or preset if it is intentional.`,
+    }));
+  const averageGap = gaps.length ? gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length : 0;
+  const suggestions = [
+    repeatedSequences[0]?.recommendation || (hot.some(([button]) => /a|right_trigger/.test(button)) ? 'Repeated scoring inputs detected; consider a single right bumper score macro.' : 'No obvious repeated score macro found yet.'),
+    averageGap > 1.8 ? 'Long gaps between inputs suggest the control map may be hard to find under match pressure.' : 'Input timing looks compact enough for early driver practice.',
+    driverCounts.driver2 > driverCounts.driver1 * 1.4 ? 'Driver 2 owns most mechanism actions; move simple intake toggles to driver 1 only if driver 2 is overloaded.' : 'Keep drivetrain and scoring ownership split between driver 1 and driver 2.',
+    'Keep slow mode on left bumper for alignment tasks.',
+    'Use lift preset buttons instead of manual stick-only control once the lift is reliable.',
+  ];
+
   return {
-    eventCount: events.length,
+    eventCount: parsedEvents.length,
     buttonUsage: hot.map(([button, count]) => ({ button, count })),
-    suggestions: [
-      hot.some(([button]) => /a|right_trigger/.test(button)) ? 'Repeated scoring inputs detected; consider a single right bumper score macro.' : 'No obvious repeated score macro found yet.',
-      'Keep slow mode on left bumper for alignment tasks.',
-      'Use lift preset buttons instead of manual stick-only control once the lift is reliable.',
-    ],
+    repeatedSequences,
+    timingGaps: {
+      averageSeconds: Number(averageGap.toFixed(2)),
+      p90Seconds: Number(percentile(gaps, 0.9).toFixed(2)),
+      maxSeconds: Number(Math.max(0, ...gaps).toFixed(2)),
+    },
+    phaseBreakdown: Array.from(phaseCounts.entries()).map(([phase, count]) => ({ phase, count })),
+    heatmap: hot.map(([control, count]) => ({
+      control,
+      intensity: Number((count / Math.max(1, hot[0]?.[1] || count)).toFixed(2)),
+      driver: eventDriver({}, control),
+    })),
+    suggestions,
     recommendedMap: {
-      driver1: { leftStick: 'drive/strafe', rightStickX: 'turn', leftBumper: 'slow mode', rightBumper: 'align/score assist' },
+      driver1: { leftStick: 'drive/strafe', rightStickX: 'turn', leftBumper: 'slow mode', rightBumper: repeatedSequences[0] ? 'top detected macro' : 'align/score assist' },
       driver2: { a: 'intake close', b: 'intake open', y: 'high preset', x: 'low preset' },
     },
   };
@@ -868,6 +1255,7 @@ export async function createProject(body = {}, { transient = false, skipAi = fal
   project.cad = generateCadConcept(project);
   project.code = generateCode(project);
   project.codeValidation = validateGeneratedJava(project.code);
+  project.autonomousPlan = buildAutonomousPlan(project);
   project.buildGuide = buildGuide(project);
   project.legalChecklist = buildLegalChecklist(project);
   project.review = reviewProject(project);
@@ -898,9 +1286,12 @@ export function projectForResponse(project) {
       title: doc.title,
       type: doc.type,
       version: doc.version,
+      sourceDate: doc.sourceDate,
+      sourceUrl: doc.sourceUrl,
       pages: doc.pages,
       ingestedAt: doc.ingestedAt,
       seasonSource: doc.seasonSource,
+      health: sourceHealthForDocument(doc, (project.documents || []).map((docId) => state.documents.get(docId)).filter(Boolean)),
     })),
     artifactUrls: {
       projectJson: `/api/projects/${id}/export.json`,
@@ -911,6 +1302,7 @@ export function projectForResponse(project) {
       cadStep: `/api/projects/${id}/cad/export.concept.step`,
       buildGuideHtml: `/api/projects/${id}/build-guide/export.html`,
     },
+    strategy: project.strategy || buildStrategy(project.team, season),
     concepts: project.concepts.map((concept) => ({
       ...concept,
       estimatedCost: normalizeCost(concept.estimatedCost ?? concept.cost, 0),
@@ -942,11 +1334,34 @@ export function projectForResponse(project) {
       sku: item.sku,
       part: item.part,
       qty: item.qty,
+      ownedQty: item.ownedQty,
+      missingQty: item.missingQty,
       price: item.price,
+      total: item.total,
+      missingTotal: item.missingTotal,
+      budgetCategory: item.budgetCategory,
       stock: item.stock,
       productUrl: item.productUrl,
       lastChecked: item.lastChecked,
+      substitutionSuggestions: item.substitutionSuggestions,
+      overrideNote: item.overrideNote,
+      overridden: item.overridden,
     })),
+    bomOverrides: project.team.bomOverrides || {},
+    bomSummary: project.bom ? {
+      conceptId: project.bom.conceptId,
+      conceptName: project.bom.conceptName,
+      subtotal: project.bom.subtotal,
+      missingSubtotal: project.bom.missingSubtotal,
+      ownedValue: project.bom.ownedValue,
+      shippingEstimatePlaceholder: project.bom.shippingEstimatePlaceholder,
+      estimatedCheckoutTotal: project.bom.estimatedCheckoutTotal,
+      budgetRemaining: project.bom.budgetRemaining,
+      budgetMode: project.bom.budgetMode,
+      subsystemTotals: project.bom.subsystemTotals || [],
+      buyFirst: project.bom.buyFirst || [],
+      substitutions: project.bom.substitutions || [],
+    } : null,
     physics: project.physics.map((item) => ({
       mechanismId: item.mechanismId,
       mechanism: item.mechanism,
@@ -961,7 +1376,10 @@ export function projectForResponse(project) {
     buildGuide: project.buildGuide || [],
     codeFiles: Object.keys(project.code || {}),
     codeValidation: project.codeValidation || validateGeneratedJava(project.code || {}),
+    autonomousPlan: project.autonomousPlan || buildAutonomousPlan(project),
     driverInsight: project.driverInsight?.suggestions?.join(' ') || '',
+    driverAnalysis: project.driverInsight || null,
     sponsorDraft: project.sponsorDraft?.subject || '',
+    sponsorDesk: project.sponsorDraft || null,
   };
 }
