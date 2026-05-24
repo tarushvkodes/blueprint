@@ -148,25 +148,13 @@ test('Blueprint API integration', async (t) => {
     assert.ok(validation.hardwareNames.includes('left_front'));
   });
 
-  await t.test('demo run creates a complete walkthrough project', async () => {
-    const demoRun = await requestJson('/projects/demo-run', { method: 'POST' });
-    t.after(async () => {
-      await requestJson(`/projects/${demoRun.id}`, { method: 'DELETE' }).catch(() => {});
-    });
+  await t.test('demo run requires verified Vertex generation', async () => {
+    const response = await fetch(`${apiBase}/projects/demo-run`, { method: 'POST' });
+    const payload = await response.json();
 
-    assert.equal(demoRun.status, 'demo-ready');
-    assert.equal(demoRun.setupValidation.ready, true);
-    assert.ok(demoRun.team.goals.includes('demo-ready FTC robot plan'));
-    assert.ok(demoRun.strategy.recommendation);
-    assert.ok(demoRun.bom.length > 0);
-    assert.ok(demoRun.bomSummary.estimatedCheckoutTotal >= 0);
-    assert.ok(demoRun.physics.length > 0);
-    assert.ok(demoRun.cad.blueprintViews.top);
-    assert.ok(demoRun.code['TeleOpMain.java']);
-    assert.ok(demoRun.autonomousPlan.path.length >= 4);
-    assert.ok(demoRun.buildGuide.length > 0);
-    assert.ok(demoRun.driverAnalysis.eventCount > 0);
-    assert.ok(demoRun.sponsorDesk.subject.includes('Blue Orbit Demo FTC'));
+    assert.equal(response.status, 503);
+    assert.equal(payload.error, 'Vertex AI is required for demo generation.');
+    assert.equal(payload.aiStatus.provider, 'local-fallback');
   });
 
   await t.test('project create, update, list, and delete round trip', async () => {
@@ -269,7 +257,7 @@ test('Blueprint API integration', async (t) => {
     assert.equal(updated.bomOverrides[target.sku].price, 12.34);
   });
 
-  await t.test('CAD, build-guide, catalog, and chat fallbacks stay usable', async () => {
+  await t.test('CAD, build-guide, catalog, and Vertex-required chat behavior stay usable', async () => {
     const project = await createProject({ name: 'Integration Artifact Team' });
     t.after(async () => {
       await requestJson(`/projects/${project.id}`, { method: 'DELETE' }).catch(() => {});
@@ -293,17 +281,24 @@ test('Blueprint API integration', async (t) => {
     assert.equal(catalog.query, 'control');
     assert.ok(Array.isArray(catalog.products));
 
-    const chat = await requestJson(`/projects/${project.id}/chat`, {
+    const chatResponse = await fetch(`${apiBase}/projects/${project.id}/chat`, {
       method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message: 'Can we make this cheaper and legal?' }),
     });
-    assert.equal(chat.generatedBy, 'local-fallback');
-    assert.match(chat.answer, /cited manual section/i);
-    assert.ok(Array.isArray(chat.citations));
-    assert.ok(chat.suggestedActions.some((action) => action.action === 'regenerate-bom'));
+    const chat = await chatResponse.json();
+    assert.equal(chatResponse.status, 503);
+    assert.equal(chat.error, 'Vertex AI is required for chat responses.');
+
     const applied = await requestJson(`/projects/${project.id}/chat/apply`, {
       method: 'POST',
-      body: JSON.stringify({ suggestion: chat.suggestedActions.find((action) => action.action === 'add-priority') }),
+      body: JSON.stringify({
+        suggestion: {
+          label: 'Lower budget priority',
+          action: 'add-priority',
+          payload: { priority: 'Low cost' },
+        },
+      }),
     });
     assert.equal(applied.applied, true);
     assert.ok(applied.project.team.priorities.includes('Low cost'));

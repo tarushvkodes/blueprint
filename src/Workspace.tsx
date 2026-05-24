@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { artifactUrl } from './api'
-import { codeSample, defaultBlueprintQuestion } from './projectData'
+import { defaultBlueprintQuestion } from './projectData'
 import { validateTeamSetupDraft } from './setupValidation'
 import { workspaceTabs, type AiStatus, type BuildGuideStep, type ChatSuggestion, type ProjectData, type ProjectSummary, type Team, type WorkspaceTab } from './types'
 import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
@@ -42,7 +42,7 @@ type WorkspaceProps = {
   switchProject: (projectId: string) => void
   regenerateProject: () => void
   saveIntake: (team: Team) => void
-  generateFullBlueprint: (team?: Team) => void
+  generateFullBlueprint: (team?: Team) => Promise<ProjectData | null>
   selectDesign: (index: number) => void
   updateBomOverride: (key: string, override: { qty?: number, price?: number, note?: string }) => void
   uploadManual: (file: File) => void
@@ -108,6 +108,20 @@ export function Workspace({
 }: WorkspaceProps) {
   const selected = project.concepts[selectedConcept] ?? project.concepts[0]
   const isVertexGenerated = project.generatedBy?.startsWith('vertex')
+  const generatedCodeEntries = Object.entries(project.code || {})
+  const displayedCodeFile = generatedCodeEntries.find(([fileName]) => /TeleOpMain\.java$/i.test(fileName)) || generatedCodeEntries[0]
+  const displayedCode = displayedCodeFile
+    ? `// ${displayedCodeFile[0]}\n${displayedCodeFile[1]}`
+    : '// Generate a project to load FTC SDK starter code.'
+  const cadPreview = project.cad
+    ? JSON.stringify({
+      generatedBy: project.cad.generatedBy,
+      disclaimer: project.cad.disclaimer,
+      robotDimensionsMm: project.cad.robotDimensionsMm,
+      subsystemLayout: project.cad.subsystemLayout,
+      verificationNotes: project.cad.verificationNotes,
+    }, null, 2)
+    : JSON.stringify(project.season?.robotConstraints || [], null, 2)
   const buildGuideRows: BuildGuideStep[] = project.buildGuide?.length
     ? project.buildGuide
     : project.buildSteps.map((step) => ({ phase: 'Build', instructions: step }))
@@ -216,6 +230,16 @@ export function Workspace({
   const buildProgress = buildGuideRows.length
     ? Object.values(completedBuildSteps).filter(Boolean).length / buildGuideRows.length
     : 0
+  const flowTabs: WorkspaceTab[] = workspaceTabs.filter((tab) => tab !== 'Dashboard')
+  const activeFlowIndex = flowTabs.indexOf(activeTab)
+  const nextTab = activeFlowIndex >= 0 ? flowTabs[(activeFlowIndex + 1) % flowTabs.length] : 'Strategy'
+  const goNext = () => setActiveTab(nextTab)
+  const handleGenerateBlueprint = async () => {
+    const generated = await generateFullBlueprint(teamDraft)
+    if (generated?.generatedBy?.startsWith('vertex')) {
+      setActiveTab('Strategy')
+    }
+  }
 
   return (
     <main className="app-shell workspace-screen">
@@ -239,6 +263,14 @@ export function Workspace({
             </button>
           ))}
         </div>
+        <label className="workspace-tab-select" aria-label="Workspace tab">
+          <span>View</span>
+          <select value={activeTab} onChange={(event) => setActiveTab(event.target.value as WorkspaceTab)}>
+            {workspaceTabs.map((tab) => (
+              <option value={tab} key={tab}>{tab}</option>
+            ))}
+          </select>
+        </label>
         <div className="workspace-nav-actions">
           <label className="project-switcher" aria-label="Saved project switcher">
             <FolderOpen size={16} />
@@ -528,7 +560,7 @@ export function Workspace({
                         <ChevronRight size={16} />
                       </button>
                     ) : (
-                      <button type="button" disabled={!setupReady} onClick={() => generateFullBlueprint(teamDraft)}>
+                      <button type="button" disabled={!setupReady} onClick={handleGenerateBlueprint}>
                         Generate blueprint
                       </button>
                     )}
@@ -695,8 +727,8 @@ export function Workspace({
                 </article>
                 <article className="strategy-wide">
                   <span>Citations</span>
-                  {(project.strategy?.citations?.length ? project.strategy.citations : [{ ruleNumber: 'Citation required', manualSection: 'Upload current manual', sourceDocument: 'Indexed documents', confidence: 'Low' }]).slice(0, 3).map((citation) => (
-                    <small key={`${citation.ruleNumber}-${citation.manualSection}`}>
+                  {(project.strategy?.citations?.length ? project.strategy.citations : [{ ruleNumber: 'Citation required', manualSection: 'Upload current manual', sourceDocument: 'Indexed documents', confidence: 'Low' }]).slice(0, 3).map((citation, index) => (
+                    <small key={`${citation.ruleNumber}-${citation.manualSection}-${index}`}>
                       {citation.ruleNumber} · {citation.manualSection} · {citation.confidence}
                     </small>
                   ))}
@@ -821,7 +853,7 @@ export function Workspace({
                 <strong>{project.codeValidation?.ok ? 'Static validation passed' : 'Static validation needs review'}</strong>
                 <span>{project.codeValidation?.note || 'Compile inside a real FTC SDK project before robot use.'}</span>
               </div>
-              <pre><code>{codeSample}</code></pre>
+              <pre><code>{displayedCode}</code></pre>
               <div className="file-row">
                 {project.codeFiles.map((file) => <span key={file}>{file}</span>)}
               </div>
@@ -840,7 +872,7 @@ export function Workspace({
                 <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadConceptJson || project.artifactUrls?.cadGltf)}><Download size={16} /> Concept JSON</button>
                 <button type="button" onClick={() => openArtifact(project.artifactUrls?.cadConceptStep || project.artifactUrls?.cadStep)}><Download size={16} /> Concept STEP note</button>
               </div>
-              <pre><code>{JSON.stringify(project.season?.robotConstraints || [], null, 2)}</code></pre>
+              <pre><code>{cadPreview}</code></pre>
             </div>
           )}
 
@@ -1071,6 +1103,15 @@ export function Workspace({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab !== 'Dashboard' && (
+            <div className="workspace-next-row">
+              <button type="button" onClick={goNext}>
+                Next: {nextTab}
+                <ChevronRight size={16} />
+              </button>
             </div>
           )}
         </div>

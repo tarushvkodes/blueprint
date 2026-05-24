@@ -62,6 +62,10 @@ export const fallbackProject: ProjectData = {
   setupValidation: undefined,
   sourceDocuments: [],
   artifactUrls: {},
+  artifactGeneration: {
+    generatedBy: 'local-fallback',
+    ai: {},
+  },
   strategy: {
     recommendation: 'Build a reliable drivetrain and one repeatable scoring path before adding complexity.',
     scoringPriorities: ['repeatable teleop scoring', 'reliable autonomous movement', 'low penalty exposure'],
@@ -110,6 +114,8 @@ export const fallbackProject: ProjectData = {
   physics: [],
   buildSteps: [],
   codeFiles: [],
+  code: {},
+  cad: null,
   codeValidation: {
     ok: false,
     issues: ['No live generated code loaded yet.'],

@@ -111,12 +111,12 @@ export function useBlueprintProject() {
       const nextProject = await startDemoRun(project)
       setProject(nextProject)
       setSelectedConcept(1)
-      setWorkspaceStatus(nextProject.generatedBy?.startsWith('vertex') ? 'Demo generated with Vertex AI' : 'Demo generated with local fallback')
+      setWorkspaceStatus('Demo generated with Vertex AI')
       listProjects().then(setProjectList).catch(() => {})
       fetchAiStatus().then(setAiStatus).catch(() => {})
       return nextProject
-    } catch {
-      setWorkspaceStatus('Demo generation failed')
+    } catch (error) {
+      setWorkspaceStatus(error instanceof BlueprintApiError ? error.message : 'Demo generation failed')
       return null
     }
   }, [project])
@@ -139,15 +139,17 @@ export function useBlueprintProject() {
       const nextProject = await generateBlueprint(project.id || 'demo', team || project.team, project)
       setProject(nextProject)
       setSelectedConcept(1)
-      setWorkspaceStatus(nextProject.generatedBy?.startsWith('vertex') ? 'Blueprint generated with Vertex AI' : 'Blueprint generated with local fallback')
+      setWorkspaceStatus('Blueprint generated with Vertex AI')
       listProjects().then(setProjectList).catch(() => {})
       fetchAiStatus().then(setAiStatus).catch(() => {})
+      return nextProject
     } catch (error) {
       if (error instanceof BlueprintApiError && error.setupValidation?.blockers?.length) {
         setWorkspaceStatus(`Finish setup: ${error.setupValidation.blockers[0]}`)
-        return
+        return null
       }
-      setWorkspaceStatus('Blueprint generation failed')
+      setWorkspaceStatus(error instanceof BlueprintApiError ? error.message : 'Blueprint generation failed')
+      return null
     }
   }, [project])
 

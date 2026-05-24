@@ -25,6 +25,7 @@ import {
   persistProjects,
   projectForResponse,
   reviewProject,
+  rebuildDerivedArtifacts,
   validateProjectSetup,
   sponsorEmail,
 } from './generators/project.js';
@@ -53,16 +54,7 @@ const demoProject = await createProject({}, { transient: true, skipAi: true });
 async function refreshDemoProjectWithAi() {
   await applyAiPacket(demoProject);
   demoProject.season = currentSeasonSource(demoProject);
-  demoProject.selectedDesign = demoProject.concepts[1] || demoProject.concepts[0];
-  demoProject.bom = buildBom(demoProject.team, demoProject.selectedDesign);
-  demoProject.physics = calculateMechanisms({ design: demoProject.selectedDesign });
-  demoProject.cad = generateCadConcept(demoProject);
-  demoProject.code = generateCode(demoProject);
-  demoProject.codeValidation = validateGeneratedJava(demoProject.code);
-  demoProject.autonomousPlan = buildAutonomousPlan(demoProject);
-  demoProject.buildGuide = buildGuide(demoProject);
-  demoProject.legalChecklist = reviewProject(demoProject).legalChecklist;
-  demoProject.review = reviewProject(demoProject);
+  rebuildDerivedArtifacts(demoProject, { preserveAi: demoProject.generatedBy?.startsWith('vertex') });
   demoProject.updatedAt = nowIso();
 }
 
@@ -99,6 +91,7 @@ registerRoutes(app, {
   persistProjects,
   projectForResponse,
   reviewProject,
+  rebuildDerivedArtifacts,
   quoteRule,
   searchCatalog,
   sponsorEmail,

@@ -30,6 +30,7 @@ export function registerRoutes(app, {
   persistProjects,
   projectForResponse,
   quoteRule,
+  rebuildDerivedArtifacts,
   reviewProject,
   searchCatalog,
   smokeTestVertex,
@@ -211,20 +212,26 @@ export function registerRoutes(app, {
   app.post('/api/projects/demo-run', async (_req, res, next) => {
     try {
       const status = aiStatus();
-      const useVerifiedVertex = status.ready && Boolean(status.lastOkAt);
-      const project = await createProject({ team: demoTeamProfile() }, { skipAi: !useVerifiedVertex });
-      if (!useVerifiedVertex && status.ready) {
-        project.generatedBy = 'local-fallback';
-        project.aiFallbackReason = 'Demo run used the deterministic local generator because Vertex has not passed a smoke test in this server session.';
+      if (!status.ready) {
+        return res.status(503).json({
+          error: 'Vertex AI is required for demo generation.',
+          aiStatus: status,
+          action: status.smokeTestRecommended
+            ? 'Run POST /api/ai/smoke-test, then try again.'
+            : 'Configure VERTEX_AI_API_KEY or VERTEX_AI_PROJECT, restart the server, run the smoke test, then try again.',
+        });
       }
+      const project = await createProject({ team: demoTeamProfile() });
       project.driverInsight = analyzeDriverLogs(demoDriverEvents());
       project.driverAnalysis = project.driverInsight;
-      project.sponsorDraft = sponsorEmail({
-        team: project.team,
-        contactName: 'Alex Rivera',
-        companyName: 'Demo Manufacturing',
-        amount: 1000,
-      });
+      if (!project.generatedBy?.startsWith('vertex') || !project.sponsorDraft) {
+        project.sponsorDraft = sponsorEmail({
+          team: project.team,
+          contactName: 'Alex Rivera',
+          companyName: 'Demo Manufacturing',
+          amount: 1000,
+        });
+      }
       project.sponsorDesk = project.sponsorDraft;
       project.demoScript = [
         'Start on Dashboard and confirm the AI provider, setup readiness, selected concept, and budget.',
@@ -303,6 +310,16 @@ export function registerRoutes(app, {
     try {
       const project = state.projects.get(req.params.id);
       if (!project) return res.status(404).json({ error: 'Project not found' });
+      const status = aiStatus();
+      if (!status.ready) {
+        return res.status(503).json({
+          error: 'Vertex AI is required to generate a blueprint.',
+          aiStatus: status,
+          action: status.smokeTestRecommended
+            ? 'Run POST /api/ai/smoke-test, then try again.'
+            : 'Configure VERTEX_AI_API_KEY or VERTEX_AI_PROJECT, restart the server, run the smoke test, then try again.',
+        });
+      }
       project.team = defaultTeam({ ...project.team, ...(req.body.team || {}) });
       project.season = currentSeasonSource(project);
       project.setupValidation = validateProjectSetup(project.team, project.season, { requireSeason: false });
@@ -310,17 +327,23 @@ export function registerRoutes(app, {
       project.strategy = buildStrategy(project.team, project.season);
       project.concepts = buildConcepts(project.team, project.season);
       project.selectedDesign = project.concepts[1] || project.concepts[0];
+      project.bom = null;
+      project.physics = null;
+      project.cad = null;
+      project.code = null;
+      project.autonomousPlan = null;
+      project.buildGuide = null;
+      project.sponsorDraft = null;
       await applyAiPacket(project);
+      if (!project.generatedBy?.startsWith('vertex')) {
+        return res.status(502).json({
+          error: 'Vertex did not return a valid blueprint packet.',
+          aiFallbackReason: project.aiFallbackReason,
+          aiStatus: aiStatus(),
+        });
+      }
       project.selectedDesign = project.concepts[1] || project.concepts[0];
-      project.bom = buildBom(project.team, project.selectedDesign);
-      project.physics = calculateMechanisms({ design: project.selectedDesign });
-      project.cad = generateCadConcept(project);
-      project.code = generateCode(project);
-      project.codeValidation = validateGeneratedJava(project.code);
-      project.autonomousPlan = buildAutonomousPlan(project);
-      project.buildGuide = project.buildGuide || buildGuide(project);
-      project.legalChecklist = reviewProject(project).legalChecklist;
-      project.review = reviewProject(project);
+      rebuildDerivedArtifacts(project, { preserveAi: project.generatedBy?.startsWith('vertex') });
       project.updatedAt = nowIso();
       persistProjects();
       res.json(projectForResponse(project));
@@ -749,10 +772,15 @@ export function registerRoutes(app, {
         `Citations available: ${JSON.stringify(citations)}`,
       ].join('\n\n'),
     });
+    if (!ai.ok) {
+      return res.status(503).json({
+        error: 'Vertex AI is required for chat responses.',
+        detail: ai.error,
+        aiStatus: aiStatus(),
+      });
+    }
     res.json({
-      answer: ai.ok
-        ? ai.data.answer
-        : `For ${project.team.name}: ${message ? `I would handle "${message}" by checking indexed rules first, then updating the relevant BOM, calculation, code, CAD, or build-guide artifact.` : 'Ask about strategy, legality, parts, torque, code, CAD, grants, or driver logs.'} I will not make a definitive legality claim without the cited manual section and version.`,
+      answer: ai.data.answer,
       citations,
       catalogHits,
       generatedBy: ai.generatedBy,

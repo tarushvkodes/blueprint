@@ -202,6 +202,10 @@ export type ProjectData = {
   aiStatus?: AiStatus
   sourceDocuments?: SourceDocument[]
   artifactUrls?: ArtifactUrls
+  artifactGeneration?: {
+    generatedBy?: string
+    ai?: Record<string, boolean>
+  }
   strategy?: StrategyPlan | null
   concepts: Concept[]
   rules: Rule[]
@@ -214,7 +218,9 @@ export type ProjectData = {
   buildSteps: string[]
   buildGuide?: BuildGuideStep[]
   codeFiles: string[]
+  code?: Record<string, string>
   codeValidation?: CodeValidation
+  cad?: Record<string, unknown> | null
   autonomousPlan?: AutonomousPlan | null
   driverInsight: string
   driverAnalysis?: DriverAnalysis | null
@@ -479,6 +485,7 @@ export type ApiProjectResponse = {
   buildGuide?: ApiBuildStep[]
   buildSteps?: string[]
   code?: Record<string, string>
+  cad?: Record<string, unknown> | null
   codeFiles?: string[]
   codeValidation?: CodeValidation
   autonomousPlan?: AutonomousPlan | null
@@ -488,6 +495,10 @@ export type ApiProjectResponse = {
   aiStatus?: AiStatus
   sourceDocuments?: SourceDocument[]
   artifactUrls?: ArtifactUrls
+  artifactGeneration?: {
+    generatedBy?: string
+    ai?: Record<string, boolean>
+  }
   strategy?: StrategyPlan | null
   driverInsight?: string | {
     suggestions?: string[]

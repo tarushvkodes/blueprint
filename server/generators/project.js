@@ -1073,7 +1073,7 @@ function projectAiPrompt(project) {
     'Return only valid JSON. Make a year-agnostic FTC robot packet from only the season/manual facts and team requirements below.',
     'Never invent point values, rule numbers, exact legal guarantees, SKU prices, or official approvals. If a fact is not in the source context, describe it as something to verify.',
     'Never make definitive legality claims. Leave rule-sensitive wording unresolved unless a cited source is provided by the context.',
-    'JSON shape: { strategy, concepts, buildGuide, chatSeed }.',
+    'JSON shape: { strategy, concepts, bom, physics, cad, code, autonomousPlan, buildGuide, sponsorDesk, chatSeed }.',
     'strategy: { recommendation, scoringPriorities, whatToIgnore, autonomous, teleOp, endgame, driverPracticeGoals, allianceCompatibility }.',
     'concepts: exactly 3 complete robot architectures, not individual subsystems.',
     'The concepts must be ordered as conservative, balanced, and high-ceiling. Use conceptIntent values "conservative", "balanced", and "high-ceiling".',
@@ -1083,6 +1083,12 @@ function projectAiPrompt(project) {
     'strategyFit must explain why the concept fits the team budget, skill level, timeline, priorities, tools, and constraints.',
     'If a concept exceeds the team budget, cons or risks must explicitly call out the budget risk.',
     'Do not use placeholder names like Concept 1, Generic Robot, Intake, Lift, Drivetrain, or Vision Rig as a standalone subsystem.',
+    'bom: { required, optional, substitutions, buyFirst }, each part item { subsystem, part, sku, qty, price, stock, note }. Use "SKU pending" if unknown, and mark prices as estimates.',
+    'physics: array of calculations { mechanism, assumptions, formula, calculation, result, safetyFactor, recommendation, warning }. Include drivetrain, lift/arm, intake, battery/current, and tipping checks.',
+    'cad: conceptual CAD object { disclaimer, robotDimensionsMm, subsystemLayout, views, wiringView, explodedAssembly, verificationNotes }. The disclaimer must say conceptual and not manufacturing-ready.',
+    'code: { files: [{ fileName, content }] }. Include FTC Java starter files for Constants.java, RobotHardware.java, DriveSubsystem.java, TeleOpMain.java, AutoMain.java, and README.md. Keep hardware names aligned to mechanisms.',
+    'autonomousPlan: { drivetrain, reliability, startPosition, alliance, desiredAction, sensors, path, pseudocode, tuningConstants, testingPlan, warnings }.',
+    'sponsorDesk: { subject, body, tiers } where tiers are { amount, benefit }.',
     'buildGuide: 6-10 Lego-like steps with phase, title, parts, tools, time, diagram, instructions, checkpoint, commonMistake, test.',
     `Team: ${JSON.stringify(project.team)}`,
     `Season source: ${JSON.stringify({
@@ -1160,6 +1166,7 @@ function normalizeAiConcepts(concepts, team, season) {
 function normalizeAiBuildGuide(steps, project) {
   if (!Array.isArray(steps) || steps.length === 0) return buildGuide(project);
   return steps.map((step, index) => ({
+    mechanismId: step.mechanismId || null,
     phase: step.phase || `Step ${index + 1}`,
     title: step.title || step.phase || `Build step ${index + 1}`,
     parts: Array.isArray(step.parts) ? step.parts : [],
@@ -1172,6 +1179,169 @@ function normalizeAiBuildGuide(steps, project) {
     test: step.test || step.testBeforeContinuing || 'Verify the subsystem is safe and repeatable.',
     generatedBy: project.generatedBy || 'vertex-ai',
   }));
+}
+
+function normalizeAiBomLine(item = {}, index = 0, required = true, project) {
+  const qty = Math.max(0, Number(item.qty ?? item.quantity ?? 1) || 0);
+  const price = Math.max(0, normalizeCost(item.price ?? item.unitPrice ?? item.estimatedPrice, 0));
+  const sku = String(item.sku || item.partNumber || 'SKU pending');
+  const subsystem = String(item.subsystem || item.category || 'Generated');
+  const part = String(item.part || item.name || item.description || `AI BOM item ${index + 1}`);
+  const mechanismId = item.mechanismId || null;
+  const mechanismIds = Array.isArray(item.mechanismIds)
+    ? item.mechanismIds.filter(Boolean)
+    : mechanismId ? [mechanismId] : [];
+  const override = project.team.bomOverrides?.[sku] || {};
+  const overrideQty = Number(override.qty);
+  const overridePrice = Number(override.price);
+  const finalQty = Number.isFinite(overrideQty) ? overrideQty : qty;
+  const finalPrice = Number.isFinite(overridePrice) ? overridePrice : price;
+  return {
+    mechanismId,
+    mechanismIds,
+    subsystem,
+    sku,
+    part,
+    qty: finalQty,
+    price: finalPrice,
+    total: finalQty * finalPrice,
+    ownedQty: 0,
+    missingQty: finalQty,
+    ownedTotal: 0,
+    missingTotal: finalQty * finalPrice,
+    supplier: item.supplier || project.team.supplier || 'Team supplier',
+    stock: item.stock || item.availability || 'AI estimate; verify before ordering',
+    productUrl: item.productUrl || null,
+    lastChecked: item.lastChecked || nowIso(),
+    required,
+    budgetCategory: required ? 'required' : 'optional',
+    substitutionSuggestions: Array.isArray(item.substitutionSuggestions) ? item.substitutionSuggestions : [],
+    overrideNote: override.note || item.note || null,
+    overridden: Boolean(Number.isFinite(overrideQty) || Number.isFinite(overridePrice) || override.note),
+  };
+}
+
+function normalizeAiBom(bom, project) {
+  if (!bom || typeof bom !== 'object') return null;
+  const required = (Array.isArray(bom.required) ? bom.required : [])
+    .map((item, index) => normalizeAiBomLine(item, index, true, project));
+  const optional = (Array.isArray(bom.optional) ? bom.optional : [])
+    .map((item, index) => normalizeAiBomLine(item, index, false, project));
+  const all = [...required, ...optional];
+  if (all.length === 0) return null;
+  const summary = summarizeBom(all.map((item) => ({
+    ...item,
+    ownedTotal: item.ownedTotal || 0,
+    missingTotal: item.missingTotal ?? item.total,
+    required: item.required,
+  })), project.team);
+  return {
+    conceptId: project.selectedDesign?.id || null,
+    conceptName: project.selectedDesign?.name || 'AI selected concept',
+    required,
+    optional,
+    spareParts: Array.isArray(bom.spareParts) ? bom.spareParts : [],
+    alreadyOwned: [],
+    missing: all.filter((item) => item.missingQty > 0),
+    substitutions: Array.isArray(bom.substitutions) ? bom.substitutions : [],
+    buyFirst: Array.isArray(bom.buyFirst) && bom.buyFirst.length
+      ? bom.buyFirst
+      : all.filter((item) => item.missingQty > 0).slice(0, 4),
+    ...summary,
+  };
+}
+
+function normalizeAiPhysics(physics, project) {
+  if (!Array.isArray(physics) || physics.length === 0) return null;
+  return physics.map((item, index) => ({
+    mechanismId: item.mechanismId || null,
+    mechanism: String(item.mechanism || `AI calculation ${index + 1}`),
+    assumptions: item.assumptions && typeof item.assumptions === 'object' ? item.assumptions : {},
+    formula: String(item.formula || 'AI-provided calculation'),
+    calculation: String(item.calculation || item.inputs || ''),
+    result: String(item.result || 'Review required'),
+    safetyFactor: String(item.safetyFactor || item.margin || 'Review'),
+    recommendation: String(item.recommendation || 'Verify with team measurements.'),
+    warning: item.warning || null,
+    generatedBy: project.generatedBy || 'vertex-ai',
+  }));
+}
+
+function normalizeAiCad(cad, project) {
+  if (!cad || typeof cad !== 'object') return null;
+  const fallback = generateCadConcept(project);
+  const disclaimer = String(cad.disclaimer || fallback.disclaimer);
+  return {
+    ...fallback,
+    ...cad,
+    disclaimer: /conceptual/i.test(disclaimer)
+      ? disclaimer
+      : `${disclaimer} Conceptual CAD starter; verify dimensions before manufacturing.`,
+    generatedBy: project.generatedBy || 'vertex-ai',
+    sourceReference: 'AI-generated from team constraints, selected architecture, and indexed season context.',
+    parametricLayout: cad.parametricLayout || fallback.parametricLayout,
+    blueprintViews: cad.blueprintViews || fallback.blueprintViews,
+    wiringView: cad.wiringView || fallback.wiringView,
+    explodedAssembly: cad.explodedAssembly || fallback.explodedAssembly,
+    robotDimensionsMm: cad.robotDimensionsMm || fallback.robotDimensionsMm,
+    mechanismIds: fallback.mechanismIds,
+  };
+}
+
+function normalizeAiCode(code) {
+  const files = Array.isArray(code?.files) ? code.files : [];
+  const entries = files
+    .map((file) => [file.fileName || file.name, file.content || file.code])
+    .filter(([name, content]) => name && content);
+  if (entries.length === 0) return null;
+  return Object.fromEntries(entries.map(([name, content]) => [String(name), String(content)]));
+}
+
+function normalizeAiAutonomousPlan(plan, project) {
+  if (!plan || typeof plan !== 'object') return null;
+  const fallback = buildAutonomousPlan(project);
+  return {
+    drivetrain: plan.drivetrain || fallback.drivetrain,
+    reliability: plan.reliability || fallback.reliability,
+    startPosition: plan.startPosition || fallback.startPosition,
+    alliance: plan.alliance || fallback.alliance,
+    desiredAction: plan.desiredAction || fallback.desiredAction,
+    sensors: normalizeTextList(plan.sensors, fallback.sensors),
+    path: Array.isArray(plan.path) && plan.path.length ? plan.path : fallback.path,
+    pseudocode: normalizeTextList(plan.pseudocode, fallback.pseudocode),
+    tuningConstants: plan.tuningConstants && typeof plan.tuningConstants === 'object' ? plan.tuningConstants : fallback.tuningConstants,
+    testingPlan: normalizeTextList(plan.testingPlan, fallback.testingPlan),
+    warnings: normalizeTextList(plan.warnings, fallback.warnings),
+    generatedBy: project.generatedBy || 'vertex-ai',
+  };
+}
+
+function normalizeAiSponsorDesk(sponsorDesk, project) {
+  if (!sponsorDesk || typeof sponsorDesk !== 'object') return null;
+  return {
+    subject: String(sponsorDesk.subject || `Supporting ${project.team.name} FTC Robotics`),
+    body: String(sponsorDesk.body || ''),
+    tiers: Array.isArray(sponsorDesk.tiers) ? sponsorDesk.tiers.map((tier) => ({
+      amount: normalizeCost(tier.amount, 0),
+      benefit: String(tier.benefit || 'Team recognition'),
+    })) : [],
+    generatedBy: project.generatedBy || 'vertex-ai',
+  };
+}
+
+export function rebuildDerivedArtifacts(project, { preserveAi = true } = {}) {
+  project.selectedDesign = project.selectedDesign || project.concepts[1] || project.concepts[0];
+  if (!preserveAi || !project.bom) project.bom = buildBom(project.team, project.selectedDesign);
+  if (!preserveAi || !project.physics) project.physics = calculateMechanisms({ design: project.selectedDesign });
+  if (!preserveAi || !project.cad) project.cad = generateCadConcept(project);
+  if (!preserveAi || !project.code) project.code = generateCode(project);
+  project.codeValidation = validateGeneratedJava(project.code);
+  if (!preserveAi || !project.autonomousPlan) project.autonomousPlan = buildAutonomousPlan(project);
+  if (!preserveAi || !project.buildGuide) project.buildGuide = buildGuide(project);
+  if (!preserveAi || !project.sponsorDraft) project.sponsorDraft = sponsorEmail({ team: project.team });
+  project.driverInsight = project.driverInsight || analyzeDriverLogs([]);
+  project.legalChecklist = buildLegalChecklist(project);
+  project.review = reviewProject(project);
 }
 
 export async function applyAiPacket(project) {
@@ -1211,6 +1381,32 @@ export async function applyAiPacket(project) {
   project.buildGuide = conceptsRepaired || conceptPacket.usedFallback
     ? buildGuide(project)
     : normalizeAiBuildGuide(ai.data.buildGuide, project);
+  const aiBom = normalizeAiBom(ai.data.bom, project);
+  const aiPhysics = normalizeAiPhysics(ai.data.physics, project);
+  const aiCad = normalizeAiCad(ai.data.cad, project);
+  const aiCode = normalizeAiCode(ai.data.code);
+  const aiAutonomous = normalizeAiAutonomousPlan(ai.data.autonomousPlan, project);
+  const aiSponsorDesk = normalizeAiSponsorDesk(ai.data.sponsorDesk, project);
+  if (aiBom) project.bom = aiBom;
+  if (aiPhysics) project.physics = aiPhysics;
+  if (aiCad) project.cad = aiCad;
+  if (aiCode) project.code = aiCode;
+  if (aiAutonomous) project.autonomousPlan = aiAutonomous;
+  if (aiSponsorDesk) project.sponsorDraft = aiSponsorDesk;
+  project.artifactGeneration = {
+    generatedBy: project.generatedBy,
+    ai: {
+      strategy: Boolean(ai.data.strategy),
+      concepts: conceptPacket.accepted,
+      bom: Boolean(aiBom),
+      physics: Boolean(aiPhysics),
+      cad: Boolean(aiCad),
+      code: Boolean(aiCode),
+      autonomousPlan: Boolean(aiAutonomous),
+      buildGuide: !conceptsRepaired && !conceptPacket.usedFallback && Array.isArray(ai.data.buildGuide),
+      sponsorDesk: Boolean(aiSponsorDesk),
+    },
+  };
   return project;
 }
 
@@ -1249,18 +1445,8 @@ export async function createProject(body = {}, { transient = false, skipAi = fal
   }
   project.season = currentSeasonSource(project);
   project.setupValidation = validateProjectSetup(project.team, project.season, { requireSeason: false });
-  project.selectedDesign = project.concepts[1];
-  project.bom = buildBom(team, project.selectedDesign);
-  project.physics = calculateMechanisms({ design: project.selectedDesign });
-  project.cad = generateCadConcept(project);
-  project.code = generateCode(project);
-  project.codeValidation = validateGeneratedJava(project.code);
-  project.autonomousPlan = buildAutonomousPlan(project);
-  project.buildGuide = buildGuide(project);
-  project.legalChecklist = buildLegalChecklist(project);
-  project.review = reviewProject(project);
-  project.driverInsight = analyzeDriverLogs([]);
-  project.sponsorDraft = sponsorEmail({ team });
+  project.selectedDesign = project.selectedDesign || project.concepts[1] || project.concepts[0];
+  rebuildDerivedArtifacts(project, { preserveAi: !skipAi });
   state.projects.set(id, project);
   if (!transient) await persistProjects();
   return project;

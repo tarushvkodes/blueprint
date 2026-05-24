@@ -17,7 +17,6 @@ import { RobotPreview } from './RobotPreview'
 import { LiquidLogoMark, ShaderBackdrop } from './VisualEffects'
 import {
   agentRows,
-  codeSample,
   defaultBlueprintQuestion,
   getAccordionPanels,
   manifesto,
@@ -67,6 +66,10 @@ export function LandingPage({
   const pinnedRef = useRef<HTMLElement>(null)
 
   useLandingAnimations({ manifestoRef, pinnedRef, refreshKey: project })
+  const generatedCodeEntries = Object.entries(project.code || {})
+  const landingCode = generatedCodeEntries.find(([fileName]) => /TeleOpMain\.java$/i.test(fileName))?.[1]
+    || generatedCodeEntries[0]?.[1]
+    || 'Generate a project to load FTC SDK starter code.'
 
   return (
     <main className="app-shell overflow-x-hidden w-full max-w-full">
@@ -255,8 +258,8 @@ export function LandingPage({
         <div className="data-panels">
           <article className="rules-panel liquid-glass">
             <h3><ShieldCheck size={20} /> Legal checklist</h3>
-            {project.rules.map((rule) => (
-              <div className="rule-row" key={rule.rule}>
+            {project.rules.map((rule, index) => (
+              <div className="rule-row" key={`${rule.rule}-${rule.section}-${index}`}>
                 <strong>{rule.rule}</strong>
                 <span>{rule.section}</span>
                 <p>{rule.note}</p>
@@ -342,7 +345,7 @@ export function LandingPage({
             <h2>FTC SDK Java starter code</h2>
             <Cpu size={22} />
           </div>
-          <pre><code>{codeSample}</code></pre>
+          <pre><code>{landingCode}</code></pre>
           <div className="file-row">
             {project.codeFiles.map((file) => (
               <span key={file}>{file}</span>
