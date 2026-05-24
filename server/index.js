@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import { aiStatus, callVertexJson, smokeTestVertex } from './ai.js';
+import { aiStatus, smokeTestGoogleAiStudio, streamGoogleAiStudioText } from './ai.js';
 import { loadCachedCatalog, searchCatalog, syncRevCatalog } from './catalog.js';
 import { ensureRuntimeDirs, port, uploadDir } from './config.js';
 import { ingestDefaultReferences, ingestDocument, ingestDocumentFromUrl, quoteRule } from './documents.js';
@@ -54,7 +54,7 @@ const demoProject = await createProject({}, { transient: true, skipAi: true });
 async function refreshDemoProjectWithAi() {
   await applyAiPacket(demoProject);
   demoProject.season = currentSeasonSource(demoProject);
-  rebuildDerivedArtifacts(demoProject, { preserveAi: demoProject.generatedBy?.startsWith('vertex') });
+  rebuildDerivedArtifacts(demoProject, { preserveAi: demoProject.generatedBy === 'demo-ai' });
   demoProject.updatedAt = nowIso();
 }
 
@@ -76,7 +76,6 @@ registerRoutes(app, {
   cadAsConceptJson,
   cadAsStep,
   cadExportName,
-  callVertexJson,
   calculateMechanisms,
   createProject,
   currentSeasonSource,
@@ -95,8 +94,9 @@ registerRoutes(app, {
   quoteRule,
   searchCatalog,
   sponsorEmail,
-  smokeTestVertex,
+  smokeTestGoogleAiStudio,
   state,
+  streamGoogleAiStudioText,
   syncRevCatalog,
   upload,
   validateProjectSetup,

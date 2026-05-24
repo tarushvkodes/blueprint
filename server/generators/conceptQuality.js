@@ -94,10 +94,10 @@ function listQuality(concept, field, min, issues, label) {
 export function normalizeAiConceptPacket(concepts, team = {}, season = {}) {
   const issues = [];
   if (!Array.isArray(concepts)) {
-    return { accepted: false, concepts: [], issues: ['Vertex did not return a concepts array.'] };
+    return { accepted: false, concepts: [], issues: ['Google AI Studio did not return a concepts array.'] };
   }
   if (concepts.length !== 3) {
-    issues.push(`Vertex returned ${concepts.length} concepts; exactly 3 are required.`);
+    issues.push(`Google AI Studio returned ${concepts.length} concepts; exactly 3 are required.`);
   }
 
   const normalized = concepts.slice(0, 3).map((concept, index) => {

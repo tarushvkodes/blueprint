@@ -20,7 +20,7 @@ The frontend is a Vite + React + TypeScript app. It has a landing page, a worksp
 
 The backend is a Node/Express server with a slim `server/index.js` bootstrap, route wiring in `server/routes.js`, and focused modules for documents, REV catalog, project generation, code, CAD, persistence, and validation.
 
-Optional AI support is wired through either `VERTEX_AI_API_KEY` for Vertex Express Mode or `VERTEX_AI_PROJECT` plus Application Default Credentials for standard Vertex AI. Without either path, the app deliberately runs in `local-fallback` mode.
+Optional AI support is wired through `GOOGLE_AI_STUDIO_API_KEY` for the Gemini API. Without an AI Studio key, the app deliberately runs in `local-fallback` mode.
 
 ## Important Files
 
@@ -39,7 +39,7 @@ Optional AI support is wired through either `VERTEX_AI_API_KEY` for Vertex Expre
 - `server/generators/project.js`: Concepts, strategy, BOM, physics, build guides, prompts, and project responses.
 - `server/generators/code.js`: FTC SDK Java starter generator.
 - `server/generators/cad.js`: Concept CAD layout/export helpers.
-- `.env.example`: Vertex Express/ADC model settings and API port settings.
+- `.env.example`: Google AI Studio model settings and API port settings.
 
 ## Verification
 

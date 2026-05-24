@@ -148,13 +148,15 @@ test('Blueprint API integration', async (t) => {
     assert.ok(validation.hardwareNames.includes('left_front'));
   });
 
-  await t.test('demo run requires verified Vertex generation', async () => {
+  await t.test('demo run returns deterministic demo AI packet without Google AI Studio', async () => {
     const response = await fetch(`${apiBase}/projects/demo-run`, { method: 'POST' });
     const payload = await response.json();
 
-    assert.equal(response.status, 503);
-    assert.equal(payload.error, 'Vertex AI is required for demo generation.');
-    assert.equal(payload.aiStatus.provider, 'local-fallback');
+    assert.equal(response.status, 201);
+    assert.equal(payload.generatedBy, 'demo-ai');
+    assert.equal(payload.status, 'demo-ready');
+    assert.ok(payload.sponsorDesk?.body);
+    assert.ok(payload.driverAnalysis?.eventCount > 0);
   });
 
   await t.test('project create, update, list, and delete round trip', async () => {
@@ -257,7 +259,7 @@ test('Blueprint API integration', async (t) => {
     assert.equal(updated.bomOverrides[target.sku].price, 12.34);
   });
 
-  await t.test('CAD, build-guide, catalog, and Vertex-required chat behavior stay usable', async () => {
+  await t.test('CAD, build-guide, catalog, and Google AI Studio-required chat behavior stay usable', async () => {
     const project = await createProject({ name: 'Integration Artifact Team' });
     t.after(async () => {
       await requestJson(`/projects/${project.id}`, { method: 'DELETE' }).catch(() => {});
@@ -288,7 +290,7 @@ test('Blueprint API integration', async (t) => {
     });
     const chat = await chatResponse.json();
     assert.equal(chatResponse.status, 503);
-    assert.equal(chat.error, 'Vertex AI is required for chat responses.');
+    assert.equal(chat.error, 'Google AI Studio is required for chat responses.');
 
     const applied = await requestJson(`/projects/${project.id}/chat/apply`, {
       method: 'POST',

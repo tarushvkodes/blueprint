@@ -331,6 +331,13 @@ export type ChatSuggestion = {
   payload?: Record<string, string | number | boolean | string[] | null>
 }
 
+export type ChatMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  status?: 'streaming' | 'complete' | 'error'
+}
+
 export type TeamSetupCheck = {
   id: string
   label: string
